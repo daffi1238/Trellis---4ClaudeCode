@@ -1,0 +1,67 @@
+# Words that are NEVER obfuscated by the generic name lists (rules and memory still apply).
+# Use it for names that are also technical terms or common words, and add any false positives you find.
+# Note: an exception applies to every generic list, so do not add real names you want to hide.
+# Reload the extension (↻) after editing this file.
+
+# --- AI assistants (they appear constantly in chats) ---
+Claude
+Gemini
+Copilot
+Grok
+Llama
+Mistral
+Kimi
+Alexa
+Siri
+Cortana
+Bard
+Jarvis
+
+# --- Programming languages and tech ---
+Ada
+Ruby
+Julia
+Swift
+Rust
+Dart
+Elixir
+Crystal
+Pascal
+Haskell
+Kafka
+Jenkins
+Cassandra
+Django
+Flask
+Rails
+Spring
+Apache
+Maven
+Oracle
+Debian
+Ubuntu
+Fedora
+Alpine
+Selenium
+Jupyter
+Grafana
+Helm
+
+# --- Common English words that are also names or surnames ---
+June
+Price
+Jack
+Frank
+Rose
+Amber
+Can
+Pop
+Park
+Song
+Oh
+Do
+Le
+Min
+Hong
+Lu
+Yu

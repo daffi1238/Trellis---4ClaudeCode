@@ -1,0 +1,11 @@
+{
+  "name": "trellis-claude-code",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Trellis for Claude Code: keep sensitive data out of the conversation.",
+  "license": "MIT",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}

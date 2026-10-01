@@ -1,0 +1,15 @@
+{
+  "name": "trellis",
+  "description": "Trellis for Claude Code: keep sensitive data out of the conversation.",
+  "owner": {
+    "name": "daffi1238",
+    "url": "https://github.com/daffi1238"
+  },
+  "plugins": [
+    {
+      "name": "trellis",
+      "source": "./",
+      "description": "Keep sensitive data out: obfuscates what Claude reads and blocks sensitive prompts, restoring the real values only on your machine."
+    }
+  ]
+}
