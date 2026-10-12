@@ -28,7 +28,7 @@ Everything runs locally in Node.js. Trellis makes no network requests and has no
 Requires Node.js 18 or later.
 
 ```
-/plugin marketplace add daffi1238/Trellis---4ClaudeCode
+/plugin marketplace add daffi1238/Trellis-4ClaudeCode
 /plugin install trellis@trellis
 ```
 
