@@ -19,9 +19,10 @@ same rules, memory and word lists.
 Everything runs locally in Node.js. Trellis makes no network requests and has no dependencies.
 
 > **Status: early version (0.1.0).** Tested end to end with Claude Code 2.1.296 (`claude -p`): Claude only saw
-> placeholders when reading files, the session transcript held no original values, edits (`trellis edit`, `multi_edit`,
-> `NotebookEdit`) and `grep` worked on the real values, `curl` with a real value was stopped, and sensitive prompts, `@` attachments and `/trellis:*`
-> commands were blocked before any API call. Feedback and issues are welcome.
+> placeholders when reading files, and no message sent to the model held an original value; edits (Trellis's
+> `edit` and `multi_edit`, `NotebookEdit`) and `grep` worked on the real values; `curl` with a real value was
+> stopped; sensitive prompts, `@` attachments and `/trellis:*` commands were blocked before any API call.
+> Feedback and issues are welcome.
 
 ## Install
 
