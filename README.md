@@ -19,8 +19,8 @@ same rules, memory and word lists.
 Everything runs locally in Node.js. Trellis makes no network requests and has no dependencies.
 
 > **Status: early version (0.1.0).** Tested end to end with Claude Code 2.1.296 (`claude -p`): Claude only saw
-> placeholders when reading files, the session transcript held no original values, edits and `grep` worked on the
-> real values, `curl` with a real value was stopped, and sensitive prompts, `@` attachments and `/trellis:*`
+> placeholders when reading files, the session transcript held no original values, edits (`trellis edit`, `multi_edit`,
+> `NotebookEdit`) and `grep` worked on the real values, `curl` with a real value was stopped, and sensitive prompts, `@` attachments and `/trellis:*`
 > commands were blocked before any API call. Feedback and issues are welcome.
 
 ## Install
@@ -46,10 +46,12 @@ Trellis is a set of [hooks](https://code.claude.com/docs/en/hooks):
 | `PreToolUse` | Local tools (`Bash`, `Read`, `Write`, `Edit`, `Grep`, `Glob`...) get placeholders replaced by the real values. Tools that send data off the machine (`WebFetch`, `WebSearch`, MCP servers) never do, and are denied input with sensitive data. |
 | `MessageDisplay` | Shows the real values in Claude's replies, on your screen only. The conversation keeps the placeholders. |
 
-It also includes a local MCP server with one tool, `edit`. Claude Code checks that an `Edit`'s `old_string` exists in
-the file before any hook runs, so an `Edit` with `[EMAIL_1]` in it always fails (the file has the real value).
-Claude is told to use Trellis's `edit` tool for those edits instead: it puts the real values back and applies the
-change on your machine. The first time, Claude Code asks you to allow it, like any MCP tool.
+It also includes a local MCP server with two tools, `edit` and `multi_edit` (several edits to one file, all or
+nothing). Claude Code checks that an `Edit`'s `old_string` exists in the file before any hook runs, so an `Edit`
+with `[EMAIL_1]` in it always fails (the file has the real value). Claude is told to use Trellis's tools for those
+edits instead: they put the real values back and apply the change on your machine. The first time, Claude Code asks
+you to allow them, like any MCP tool. `Write` and `NotebookEdit` do not have this problem (they do not check the new
+content against the file), so the hook restores their placeholders directly.
 
 ### An example
 
@@ -149,8 +151,8 @@ Trellis only sees what passes through hooks. Know what it does not cover:
   read it.
 - **`CLAUDE.md` and other context loaded automatically** (memory files, the git status Claude Code adds to the
   system prompt) are sent as they are. Trellis warns about `CLAUDE.md` files, but cannot change them.
-- **The built-in `Edit` tool cannot use placeholders** (see above); edits go through Trellis's `edit` tool.
-  `MultiEdit` and `NotebookEdit` have the same problem and no replacement yet.
+- **The built-in `Edit` tool cannot use placeholders** (see above); those edits go through Trellis's `edit` and
+  `multi_edit` tools.
 - **Prompts cannot be rewritten** by a hook, only blocked; that is why you get an obfuscated version to send.
 - **Tool errors** cannot be rewritten by hooks: an error message that quotes sensitive data reaches Claude.
 - **Images and PDFs** are not inspected.
@@ -162,8 +164,8 @@ Trellis only sees what passes through hooks. Know what it does not cover:
   cannot be detected.
 - **Literal placeholders.** Text that already looks like a known placeholder (`[EMAIL_1]`) is restored when Claude
   writes it to a file.
-- **Local transcripts** (`~/.claude/projects/`) and your terminal history may contain original values; they stay on
-  your machine.
+- **Local transcripts** (`~/.claude/projects/`) and your terminal history may contain original values (the prompts
+  you typed, and the log of what the hooks returned); they stay on your machine and are not sent to Claude.
 
 ## Development
 

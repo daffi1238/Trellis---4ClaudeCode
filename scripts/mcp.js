@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Local MCP server with one tool, "edit": the Edit tool for text that contains Trellis placeholders.
+// Local MCP server with the edit tools for text that contains Trellis placeholders: "edit" and "multi_edit".
 //
 // Claude Code checks that an Edit's old_string exists in the file before any hook runs, so an Edit written with
-// placeholders ("[EMAIL_1]") always fails: the file has the real value. This tool restores the placeholders and
-// applies the edit itself, on this machine. MCP over stdio, newline-delimited JSON-RPC, no dependencies.
+// placeholders ("[EMAIL_1]") always fails: the file has the real value. These tools restore the placeholders and
+// apply the edits themselves, on this machine. MCP over stdio, newline-delimited JSON-RPC, no dependencies.
 'use strict';
 
 const fs = require('node:fs');
@@ -34,6 +34,37 @@ const EDIT_TOOL = {
   annotations: { title: 'Edit with placeholders', destructiveHint: true, openWorldHint: false }
 };
 
+const MULTI_EDIT_TOOL = {
+  name: 'multi_edit',
+  description:
+    'Apply several edits to one file at once, when they contain Trellis placeholders such as [EMAIL_1]. ' +
+    'Edits are applied in order, each to the result of the previous one, with the same rules as the edit tool. ' +
+    'All or nothing: if any edit fails, the file is left unchanged.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      file_path: { type: 'string', description: 'Absolute path of the file to modify' },
+      edits: {
+        type: 'array',
+        minItems: 1,
+        items: {
+          type: 'object',
+          properties: {
+            old_string: { type: 'string' },
+            new_string: { type: 'string' },
+            replace_all: { type: 'boolean' }
+          },
+          required: ['old_string', 'new_string']
+        }
+      }
+    },
+    required: ['file_path', 'edits']
+  },
+  annotations: { title: 'Multi-edit with placeholders', destructiveHint: true, openWorldHint: false }
+};
+
+const TOOLS = [EDIT_TOOL, MULTI_EDIT_TOOL];
+
 function projectDir() {
   return process.env.CLAUDE_PROJECT_DIR || process.cwd();
 }
@@ -44,29 +75,46 @@ function count(haystack, needle) {
   return n;
 }
 
-// Returns a short message; never includes file contents or restored values (it goes back to Claude).
-function edit(args) {
-  const { file_path: rawPath, old_string: rawOld, new_string: rawNew, replace_all: all = false } = args || {};
-  if (typeof rawPath !== 'string' || typeof rawOld !== 'string' || typeof rawNew !== 'string') {
-    throw new Error('file_path, old_string and new_string must be strings');
-  }
-  if (rawOld === rawNew) throw new Error('old_string and new_string are the same');
+// Applies edits ({ old_string, new_string, replace_all }) to a file, all or nothing. Returns a short message
+// that never includes file contents or restored values (it goes back to Claude).
+function applyEdits(rawPath, edits) {
+  if (typeof rawPath !== 'string') throw new Error('file_path must be a string');
+  if (!Array.isArray(edits) || !edits.length) throw new Error('edits must be a non-empty array');
   const vault = Vault.read(projectDir());
   const file = path.resolve(projectDir(), R.restoreText(rawPath, vault).text);
-  const oldS = R.restoreText(rawOld, vault).text;
-  const newS = R.restoreText(rawNew, vault).text;
-  const unknown = [...new Set((rawOld + rawNew).match(R.TOKEN_RE) || [])].filter((t) => vault.valueOf(t) === undefined);
-  const text = fs.readFileSync(file, 'utf8');
-  if (!oldS) throw new Error('old_string is empty');
-  const n = count(text, oldS);
-  if (n === 0) {
-    throw new Error(`old_string not found in the file${unknown.length ? ` (unknown placeholders: ${unknown.join(', ')})` : ''}. Read the file again and copy the text exactly.`);
-  }
-  if (n > 1 && !all) throw new Error(`old_string matches ${n} times; add more context or set replace_all.`);
-  const out = all ? text.split(oldS).join(newS) : text.replace(oldS, () => newS);
-  fs.writeFileSync(file, out);
-  return `Edited ${rawPath}: ${all ? n : 1} replacement${(all ? n : 1) === 1 ? '' : 's'}.`;
+  let text = fs.readFileSync(file, 'utf8');
+  let total = 0;
+  edits.forEach((e, i) => {
+    const where = edits.length > 1 ? `edit ${i + 1}: ` : '';
+    const { old_string: rawOld, new_string: rawNew, replace_all: all = false } = e || {};
+    if (typeof rawOld !== 'string' || typeof rawNew !== 'string') throw new Error(`${where}old_string and new_string must be strings`);
+    if (!rawOld) throw new Error(`${where}old_string is empty`);
+    if (rawOld === rawNew) throw new Error(`${where}old_string and new_string are the same`);
+    const oldS = R.restoreText(rawOld, vault).text;
+    const newS = R.restoreText(rawNew, vault).text;
+    const n = count(text, oldS);
+    if (n === 0) {
+      const unknown = [...new Set((rawOld + rawNew).match(R.TOKEN_RE) || [])].filter((t) => vault.valueOf(t) === undefined);
+      throw new Error(`${where}old_string not found in the file${unknown.length ? ` (unknown placeholders: ${unknown.join(', ')})` : ''}. Read the file again and copy the text exactly.`);
+    }
+    if (n > 1 && !all) throw new Error(`${where}old_string matches ${n} times; add more context or set replace_all.`);
+    text = all ? text.split(oldS).join(newS) : text.replace(oldS, () => newS);
+    total += all ? n : 1;
+  });
+  fs.writeFileSync(file, text);
+  return `Edited ${rawPath}: ${total} replacement${total === 1 ? '' : 's'}.`;
 }
+
+function edit(args) {
+  const { file_path: p, ...one } = args || {};
+  return applyEdits(p, [one]);
+}
+
+function multiEdit(args) {
+  return applyEdits(args?.file_path, args?.edits);
+}
+
+const HANDLERS = { edit, multi_edit: multiEdit };
 
 function reply(id, result) {
   process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n');
@@ -89,11 +137,12 @@ function handle(msg) {
     case 'ping':
       return reply(id, {});
     case 'tools/list':
-      return reply(id, { tools: [EDIT_TOOL] });
+      return reply(id, { tools: TOOLS });
     case 'tools/call': {
-      if (params?.name !== 'edit') return fail(id, -32602, `Unknown tool: ${params?.name}`);
+      const run = HANDLERS[params?.name];
+      if (!run) return fail(id, -32602, `Unknown tool: ${params?.name}`);
       try {
-        return reply(id, { content: [{ type: 'text', text: edit(params.arguments) }] });
+        return reply(id, { content: [{ type: 'text', text: run(params.arguments) }] });
       } catch (e) {
         return reply(id, { content: [{ type: 'text', text: e.code ? `${e.code}: cannot edit the file` : e.message }], isError: true });
       }
@@ -117,4 +166,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { edit, handle, EDIT_TOOL };
+module.exports = { edit, multiEdit, handle, TOOLS };

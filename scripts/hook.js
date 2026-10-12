@@ -25,6 +25,7 @@ const OUTBOUND_TOOLS = new Set(['WebFetch', 'WebSearch']);
 // Trellis's own MCP server (scripts/mcp.js): local, restores placeholders itself.
 const OWN_TOOL_RE = /^mcp__plugin_trellis_trellis__/;
 const EDIT_TOOL = 'mcp__plugin_trellis_trellis__edit';
+const MULTI_EDIT_TOOL = 'mcp__plugin_trellis_trellis__multi_edit';
 // Commands that can send data off the machine (or run code that can).
 const NETWORK_RE = new RegExp(
   '(?:^|[\\s;&|(`$\'"])(?:curl|wget|nc|ncat|netcat|socat|telnet|ssh|scp|sftp|rsync|ftp|http|https|xh|aria2c|' +
@@ -38,7 +39,7 @@ const SESSION_CONTEXT = [
   'Trellis (a privacy plugin) is active in this session.',
   'Sensitive values in tool results (emails, keys, names, the user\'s own terms...) are replaced by placeholders such as [EMAIL_1] or [NAME_2].',
   'Use placeholders exactly as written, brackets included, in commands, file writes and replies: on the user\'s machine Trellis puts the real values back when local tools run, and the user sees the real values on screen.',
-  `The built-in Edit tool cannot match text that contains placeholders (the file has the real values and Edit checks it before Trellis runs): when old_string would contain a placeholder, use the ${EDIT_TOOL} tool instead, with the same arguments. Write, Bash, Grep and Glob accept placeholders directly.`,
+  `The built-in Edit tool cannot match text that contains placeholders (the file has the real values and Edit checks it before Trellis runs): when old_string would contain a placeholder, use the ${EDIT_TOOL} tool instead, with the same arguments (${MULTI_EDIT_TOOL} for several edits to one file). Write, NotebookEdit, Bash, Grep and Glob accept placeholders directly.`,
   'Do not guess, decode or reconstruct the original values, and do not ask the user for them.',
   'Tools that send data off the machine (web fetch, web search, MCP servers) receive placeholders as they are.',
   'Text such as EMAIL_1 without brackets is not a placeholder.'
