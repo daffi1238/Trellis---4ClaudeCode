@@ -18,8 +18,10 @@ same rules, memory and word lists.
 
 Everything runs locally in Node.js. Trellis makes no network requests and has no dependencies.
 
-> **Status: early version (0.1.0).** The hooks are covered by tests that replay Claude Code's hook input; it has not
-> yet been tested end to end in live sessions. Feedback and issues are welcome.
+> **Status: early version (0.1.0).** Tested end to end with Claude Code 2.1.296 (`claude -p`): Claude only saw
+> placeholders when reading files, the session transcript held no original values, edits and `grep` worked on the
+> real values, `curl` with a real value was stopped, and sensitive prompts, `@` attachments and `/trellis:*`
+> commands were blocked before any API call. Feedback and issues are welcome.
 
 ## Install
 
@@ -44,6 +46,11 @@ Trellis is a set of [hooks](https://code.claude.com/docs/en/hooks):
 | `PreToolUse` | Local tools (`Bash`, `Read`, `Write`, `Edit`, `Grep`, `Glob`...) get placeholders replaced by the real values. Tools that send data off the machine (`WebFetch`, `WebSearch`, MCP servers) never do, and are denied input with sensitive data. |
 | `MessageDisplay` | Shows the real values in Claude's replies, on your screen only. The conversation keeps the placeholders. |
 
+It also includes a local MCP server with one tool, `edit`. Claude Code checks that an `Edit`'s `old_string` exists in
+the file before any hook runs, so an `Edit` with `[EMAIL_1]` in it always fails (the file has the real value).
+Claude is told to use Trellis's `edit` tool for those edits instead: it puts the real values back and applies the
+change on your machine. The first time, Claude Code asks you to allow it, like any MCP tool.
+
 ### An example
 
 ```
@@ -52,7 +59,7 @@ Claude > Read config/team.yml
          owner: [NAME_1] [SURNAME_1] <[EMAIL_1]>      ← what Claude sees
 Claude > The owner is Laura Martínez (laura.martinez@example.com).   ← what you see
 you    > Add a comment with her email above the db block
-Claude > Edit config/team.yml: "# contact: [EMAIL_1]"
+Claude > trellis edit config/team.yml: "# contact: [EMAIL_1]"
          → the file gets "# contact: laura.martinez@example.com"
 ```
 
@@ -67,7 +74,8 @@ Claude > Edit config/team.yml: "# contact: [EMAIL_1]"
 ### Commands that could send data out
 
 A shell command that receives real values and looks able to reach the network (`curl`, `ssh`, `git push`,
-`python`, `node`...) asks for your permission first, showing which placeholders it would receive. This protects you from a prompt injection in a file trying to send your data somewhere.
+`python`, `node`...) asks for your permission first, showing which placeholders it would receive. This protects you from a prompt injection in a file trying to send your data somewhere. In non-interactive
+runs (`claude -p`) there is nobody to ask, so the command is denied.
 
 ## Commands
 
@@ -141,6 +149,8 @@ Trellis only sees what passes through hooks. Know what it does not cover:
   read it.
 - **`CLAUDE.md` and other context loaded automatically** (memory files, the git status Claude Code adds to the
   system prompt) are sent as they are. Trellis warns about `CLAUDE.md` files, but cannot change them.
+- **The built-in `Edit` tool cannot use placeholders** (see above); edits go through Trellis's `edit` tool.
+  `MultiEdit` and `NotebookEdit` have the same problem and no replacement yet.
 - **Prompts cannot be rewritten** by a hook, only blocked; that is why you get an obfuscated version to send.
 - **Tool errors** cannot be rewritten by hooks: an error message that quotes sensitive data reaches Claude.
 - **Images and PDFs** are not inspected.
