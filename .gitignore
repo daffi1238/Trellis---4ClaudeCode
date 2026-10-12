@@ -1,3 +1,6 @@
 node_modules/
 *.tmp
 .DS_Store
+# Written by Claude Code for mod development (types for the mods API)
+.claude-plugin/types/
+tsconfig.json
