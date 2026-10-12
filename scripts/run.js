@@ -14,8 +14,7 @@
 
 const fs = require('node:fs');
 const { spawnSync } = require('node:child_process');
-const { Vault } = require('../lib/vault.js');
-const { readJson } = require('../lib/settings.js');
+const Vault = require('../lib/vault.js');
 const R = require('../lib/redact.js');
 
 const vaultFile = process.argv[2];
@@ -25,7 +24,7 @@ if (!vaultFile) {
 }
 // The heredoc ends with a newline that is not part of the command.
 const command = fs.readFileSync(0, 'utf8').replace(/\n$/, '');
-const vault = new Vault(readJson(vaultFile, null));
+const vault = Vault.readFile(vaultFile);
 const { text } = R.restoreText(command, vault);
 const r = spawnSync('/bin/bash', ['-c', text], { stdio: ['ignore', 'inherit', 'inherit'] });
 if (r.error) {

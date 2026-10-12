@@ -20,7 +20,7 @@ same rules, memory and word lists.
 
 Everything runs locally in Node.js. Trellis makes no network requests and has no dependencies.
 
-> **Status: early version (0.6.0).** Tested end to end with Claude Code 2.1.296 (`claude -p`): Claude only saw
+> **Status: early version (0.7.0).** Tested end to end with Claude Code 2.1.296 (`claude -p`): Claude only saw
 > placeholders when reading files, and no message sent to the model held an original value; edits (Trellis's
 > `edit` and `multi_edit`, `NotebookEdit`) and `grep` worked on the real values; `curl` with a real value was
 > stopped; sensitive prompts, `@` attachments and `/trellis:*` commands were blocked before any API call; in auto
@@ -91,8 +91,27 @@ Claude > trellis edit config/team.yml: "# contact: [EMAIL_1]"
 
 - One placeholder per exact value: `laura@example.com` and `LAURA@EXAMPLE.COM` get different placeholders, so
   edits restore exactly what was in the file.
-- Placeholders are kept per project, in `vault/<hash>.json` inside the data directory (readable only by you), so
-  they survive resumed and compacted sessions. `/trellis:clear` forgets them.
+- Placeholders are kept per project, in `vault/<hash>.json` inside the data directory, so they survive resumed and
+  compacted sessions. `/trellis:clear` forgets them.
+
+### Vault encryption
+
+The vaults hold the original values, so they are encrypted (AES-256-GCM) with a key kept apart from them:
+
+1. `TRELLIS_VAULT_KEY` (32 bytes, base64), when set: for automation.
+2. The system keyring: macOS Keychain, or the Secret Service on Linux (GNOME Keyring, KWallet…) through
+   `secret-tool` (`sudo apt install libsecret-tools` on Debian/Ubuntu).
+3. Otherwise a key file, `~/.config/trellis/vault-key.json` (readable only by you), outside the data directory, so a
+   backup or sync of `~/.claude` does not carry the vaults and their key together.
+
+`/trellis:status` shows which one is used; `~/.config/trellis/vault-key.json` records it, so a locked keyring never
+leads to a new key. If the key cannot be read, Trellis fails closed (tool results withheld, prompts blocked) until
+it can. A vault the key cannot open (key lost) is moved aside (`*.unreadable-*`) and a new one started. Vaults from
+earlier versions are encrypted at the next session start.
+
+This protects the values at rest: backups, synced or shared folders, a vault copied by mistake. It does not protect
+them from programs running as you, which can read the key file or ask the keyring as Trellis does. Your settings
+(`settings.json`, including the memory terms) stay in plain JSON, so you can edit them.
 - Only the bracketed form is restored: `EMAIL_1` in code is left alone.
 
 ### Auto mode
@@ -291,6 +310,7 @@ Trellis only sees what passes through hooks. Know what it does not cover:
   cannot be detected.
 - **Literal placeholders.** Text that already looks like a known placeholder (`[EMAIL_1]`) is restored when Claude
   writes it to a file.
+- **Memory terms** in `settings.json` are not encrypted (the vaults are).
 - **Local transcripts** (`~/.claude/projects/`) and your terminal history may contain original values (the prompts
   you typed, and the log of what the hooks returned); they stay on your machine and are not sent to Claude.
 

@@ -227,7 +227,7 @@ function proxyPreToolUse(tool, toolInput, settings) {
   const command = String(toolInput?.command || '');
   if (!NETWORK_RE.test(command)) return null;
   const labels = R.scan(command, settings);
-  const vault = new Vault.Vault(S.readJson(ProxyState.vaultFile(), null));
+  const vault = Vault.readFile(ProxyState.vaultFile());
   const re = T.literalRegex(vault);
   if (re) {
     const byValue = new Map(Object.values(vault.data.tokens).map((t) => [t.value, t.label]));
@@ -320,6 +320,8 @@ function claudeMdFiles(projectDir) {
 function onSessionStart(input) {
   const settings = S.load('prompt');
   if (!settings.enabled) return null;
+  // Vaults written by versions before encryption are encrypted now, not at their next new placeholder.
+  for (const file of [Vault.vaultPath(projectDirOf(input)), ProxyState.vaultFile()]) Vault.encryptInPlace(file);
   let updated = null;
   try {
     updated = Service.refresh(); // after a plugin update, the proxy service runs the new version
