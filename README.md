@@ -98,6 +98,52 @@ A shell command that receives real values and looks able to reach the network (`
 `python`, `node`...) asks for your permission first, showing which placeholders it would receive. This protects you from a prompt injection in a file trying to send your data somewhere. In non-interactive
 runs (`claude -p`) there is nobody to ask, so the command is denied.
 
+## Proxy mode (experimental)
+
+Hooks only see what passes through them. Proxy mode closes the remaining gaps: a local proxy between Claude Code and
+the model API obfuscates every Messages API request on its way out, whatever put the data there (`CLAUDE.md`, `@`
+attachments, the git status, tool errors, Claude Code's own internal calls such as the auto-mode classifier), and
+restores the responses on their way back.
+
+```bash
+node scripts/proxy.js                     # listens on 127.0.0.1:8788, forwards to https://api.anthropic.com
+ANTHROPIC_BASE_URL=http://127.0.0.1:8788 claude
+```
+
+`--upstream <url>` forwards to another Anthropic-compatible API. It uses the same settings and memory as the plugin,
+with one vault for every session (`vault/proxy.json`).
+
+| | Hooks (plugin) | Proxy mode |
+|---|---|---|
+| Tool results, prompts | ✅ | ✅ |
+| `CLAUDE.md`, `@` attachments, git status, tool errors | ⚠️ warns or blocks | ✅ obfuscated |
+| Auto-mode classifier | ✅ (Bash wrapped, other tools redirected) | ✅ |
+| Sensitive prompts | blocked, you resend an obfuscated version | sent obfuscated, nothing to resend |
+| Built-in `Edit` with placeholders | ❌ (Trellis's `edit` tool instead) | ✅ (Claude Code gets real values) |
+| Web and MCP tools get placeholders, never real values | ✅ | ✅ |
+| Network-capable commands with real values ask first | ✅ | ❌ not yet |
+| Setup | `/plugin install` | a process to keep running, and `ANTHROPIC_BASE_URL` |
+
+How it works:
+
+- **Requests:** every string in `system` and `messages` goes through the rules, word lists and memory, then through a
+  literal pass that replaces every value already in the vault, wherever it appears (responses are restored, so
+  Claude Code sends real values back in the history, sometimes where no rule would detect them again).
+- **Responses:** placeholders are restored in text and in tool calls, including streamed responses, where a
+  placeholder can be split across chunks. Tool calls to web and MCP tools are left with placeholders.
+- **Thinking blocks** are never changed: the API rejects a modified one. The model only sees placeholders, so they
+  only contain placeholders.
+- **Deterministic:** the same history always gives the same request, so prompt caching keeps working.
+- **Fails closed:** a request that cannot be obfuscated is not sent.
+
+Tested live with Claude Code 2.1.296 in auto mode, with the API requests recorded behind the proxy: the built-in
+`Edit` and Bash worked on the real values, the `CLAUDE.md` and `@` attachment data were obfuscated, and no request
+held an original value. Obfuscation costs about 60 ms for a 400 KB request.
+
+Limits: only requests to the model API go through the proxy. Web fetches, MCP servers, telemetry and claude.ai
+connectors use their own connections (tool calls to them keep placeholders, see above). Local transcripts hold the
+real values.
+
 ## Commands
 
 The commands run on your machine and never reach Claude; their replies do not repeat your terms.
