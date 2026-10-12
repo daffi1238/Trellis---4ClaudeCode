@@ -4,6 +4,8 @@
 //   obfuscator.js             -> lib/obfuscator.js          (verbatim)
 //   wordlists/*.txt           -> wordlists/*.txt            (verbatim; files gone from Trellis are removed)
 //   defaults.js (rules)       -> lib/default-rules.json     (minus the browser's disabled keyword example)
+//   defaults.js (outdated)    -> lib/outdated-patterns.json (earlier default patterns, to upgrade stored rules)
+//   THIRD_PARTY_NOTICES.md    -> THIRD_PARTY_NOTICES.md     (licences of third-party material in the rules)
 //
 //   node scripts/sync-engine.js --from ../Trellis           copy
 //   node scripts/sync-engine.js --from ../Trellis --check   only compare; exit 1 if anything differs (CI)
@@ -32,15 +34,18 @@ function parseArgs(argv) {
   return args;
 }
 
-// The default rules, read by running defaults.js in a sandbox (it only assigns to globalThis at load time).
-function trellisRules(src) {
+// defaults.js run in a sandbox (at load time it only assigns to globalThis).
+function trellisDefaults(src) {
   const ctx = {};
   ctx.globalThis = ctx;
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(path.join(src, 'defaults.js'), 'utf8'), ctx, { filename: 'defaults.js' });
   const rules = ctx.TRELLIS_DEFAULTS?.rules;
   if (!Array.isArray(rules) || !rules.length) throw new Error('no rules found in defaults.js');
-  return JSON.parse(JSON.stringify(rules.filter((r) => !SKIP_RULES.has(r.id))));
+  return {
+    rules: JSON.parse(JSON.stringify(rules.filter((r) => !SKIP_RULES.has(r.id)))),
+    outdated: JSON.parse(JSON.stringify(ctx.TRELLIS_OUTDATED_PATTERNS || {}))
+  };
 }
 
 // What the plugin should contain: { relative path -> content }, plus the files that should not exist.
@@ -52,7 +57,11 @@ function expected(src, root) {
   files.set('lib/obfuscator.js', fs.readFileSync(path.join(src, 'obfuscator.js'), 'utf8'));
   const lists = fs.readdirSync(path.join(src, 'wordlists')).filter((f) => f.endsWith('.txt')).sort();
   for (const f of lists) files.set(`wordlists/${f}`, fs.readFileSync(path.join(src, 'wordlists', f), 'utf8'));
-  files.set('lib/default-rules.json', JSON.stringify(trellisRules(src), null, 2) + '\n');
+  const defaults = trellisDefaults(src);
+  files.set('lib/default-rules.json', JSON.stringify(defaults.rules, null, 2) + '\n');
+  files.set('lib/outdated-patterns.json', JSON.stringify(defaults.outdated, null, 2) + '\n');
+  const notices = path.join(src, 'THIRD_PARTY_NOTICES.md');
+  if (fs.existsSync(notices)) files.set('THIRD_PARTY_NOTICES.md', fs.readFileSync(notices, 'utf8'));
   const stale = fs.existsSync(path.join(root, 'wordlists'))
     ? fs.readdirSync(path.join(root, 'wordlists')).filter((f) => f.endsWith('.txt') && !lists.includes(f)).map((f) => `wordlists/${f}`)
     : [];

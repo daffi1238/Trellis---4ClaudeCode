@@ -16,12 +16,14 @@ function fakeTrellis() {
   fs.mkdirSync(path.join(dir, 'wordlists'));
   fs.writeFileSync(path.join(dir, 'obfuscator.js'), '// engine v1\n');
   fs.writeFileSync(path.join(dir, 'wordlists', 'first-names.txt'), 'Laura\nSarah\n');
+  fs.writeFileSync(path.join(dir, 'THIRD_PARTY_NOTICES.md'), '# Third-party notices\n');
   fs.writeFileSync(
     path.join(dir, 'defaults.js'),
     `globalThis.TRELLIS_DEFAULTS = { rules: [
       { id: 'kw-example', name: 'Keywords', type: 'keyword', pattern: 'Acme Corp', enabled: false },
       { id: 'email', name: 'Email', type: 'regex', pattern: '\\\\S+@\\\\S+', flags: 'g', replacement: '', enabled: true }
     ] };
+    globalThis.TRELLIS_OUTDATED_PATTERNS = { email: ['old@pattern'] };
     globalThis.trellisGetSettings = async function () { return chrome.storage.local.get(null); };\n`
   );
   return dir;
@@ -39,6 +41,8 @@ test('copies the engine, lists and rules; check passes afterwards', () => {
   assert.equal(fs.readFileSync(path.join(to, 'wordlists', 'first-names.txt'), 'utf8'), 'Laura\nSarah\n');
   const rules = JSON.parse(fs.readFileSync(path.join(to, 'lib', 'default-rules.json'), 'utf8'));
   assert.deepEqual(rules.map((x) => x.id), ['email'], 'the disabled keyword example is left out');
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(to, 'lib', 'outdated-patterns.json'), 'utf8')), { email: ['old@pattern'] });
+  assert.equal(fs.readFileSync(path.join(to, 'THIRD_PARTY_NOTICES.md'), 'utf8'), '# Third-party notices\n');
   assert.equal(run('--from', src, '--to', to, '--check').status, 0);
 });
 

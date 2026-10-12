@@ -257,3 +257,16 @@ test('a malformed settings file falls back to the defaults', () => {
   fs.writeFileSync(path.join(sb.home, 'settings.json'), '{ not json');
   assert.equal(prompt(sb, 'Mail sarah.johnson@example.com').decision, 'block');
 });
+
+test('checksums and new rules apply to tool results', () => {
+  const sb = sandbox();
+  const out = post(sb, 'Bash', { stdout: 'order 1234 5678 9012 3456\ncard 4111 1111 1111 1111\nDATABASE_URL=postgres://app:' + 'S3cr3tPass@db.internal/x' }).hookSpecificOutput.updatedToolOutput.stdout;
+  assert.equal(out, 'order 1234 5678 9012 3456\ncard [CARD_1]\nDATABASE_URL=postgres://app:[PASSWORD_1]@db.internal/x');
+});
+
+test('stored or imported rules get new defaults and validators, except deleted ones', () => {
+  const sb = sandbox();
+  sb.settings({ rules: [{ id: 'card', name: 'Card', type: 'regex', pattern: '\\b(?:\\d{4}[ -]?){3}\\d{4}\\b', flags: 'g', enabled: true }], dismissedRules: ['email'] });
+  const r = post(sb, 'Bash', { stdout: 'order 1234 5678 9012 3456, mail a@example.com, Authorization: Bearer ' + 'abcdef123456789' });
+  assert.equal(r.hookSpecificOutput.updatedToolOutput.stdout, 'order 1234 5678 9012 3456, mail a@example.com, Authorization: Bearer [TOKEN_1]');
+});

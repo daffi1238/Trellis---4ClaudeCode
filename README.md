@@ -18,7 +18,7 @@ same rules, memory and word lists.
 
 Everything runs locally in Node.js. Trellis makes no network requests and has no dependencies.
 
-> **Status: early version (0.4.0).** Tested end to end with Claude Code 2.1.296 (`claude -p`): Claude only saw
+> **Status: early version (0.5.0).** Tested end to end with Claude Code 2.1.296 (`claude -p`): Claude only saw
 > placeholders when reading files, and no message sent to the model held an original value; edits (Trellis's
 > `edit` and `multi_edit`, `NotebookEdit`) and `grep` worked on the real values; `curl` with a real value was
 > stopped; sensitive prompts, `@` attachments and `/trellis:*` commands were blocked before any API call; in auto
@@ -195,9 +195,15 @@ The commands run on your machine and never reach Claude; their replies do not re
 
 The same as the browser extension:
 
-- **Rules:** emails, API keys (Anthropic, OpenAI, AWS, GitHub, Slack, Google), JWTs, private keys, passwords and
-  tokens in assignments (`password=...`), IBANs, card numbers, IPv4 addresses, Spanish national IDs and phone
-  numbers. Add your own regex or keyword rules.
+- **Rules:** emails, phone numbers (Spanish and international), IBANs, cards, Spanish IDs, IPv4 addresses, JWTs,
+  private keys, `password=`-style secrets, passwords in URLs (`postgres://user:password@host`), `Authorization`
+  headers, webhook URLs (Slack, Discord, Teams) and API keys of about 50 providers (Anthropic, OpenAI, AWS, Google,
+  GitHub, GitLab, Slack, Stripe, Twilio, SendGrid, npm, PyPI, Hugging Face, DigitalOcean, Vault…). Cards, IBANs,
+  Spanish IDs and JWTs must pass their checksum or structure check (Luhn, ISO 13616 mod-97, DNI/NIE letter, JWT
+  header), so an order number is not taken for a card. API key formats are adapted from
+  [gitleaks](https://github.com/gitleaks/gitleaks) (MIT, see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)). Add
+  your own regex or keyword rules; new built-in rules reach your settings on update, except those you deleted
+  (`dismissedRules`).
 - **Word lists:** first names and surnames in many languages (capitalized words only), with a list of exceptions.
 - **Memory:** your own terms, matched ignoring case and accents.
 
@@ -237,7 +243,7 @@ be there:
 | `localMcpServers` | MCP servers that run locally and may receive real values, e.g. `["sqlite"]` | `[]` |
 | `restoreDisplay` | Show real values in replies on your screen | `true` |
 | `checkClaudeMd` | Warn about sensitive data in `CLAUDE.md` files at session start | `true` |
-| `rules`, `memory`, `allowlist`, `exceptionsExtra`, `wordlists` | Same format as the browser extension | |
+| `rules`, `memory`, `allowlist`, `exceptionsExtra`, `wordlists`, `dismissedRules` | Same format as the browser extension | |
 
 ## Limitations
 
@@ -276,7 +282,8 @@ claude --plugin-dir .            # try it without installing
 ```
 
 The detection engine is shared with the [browser extension](https://github.com/daffi1238/Trellis): `lib/obfuscator.js`,
-`wordlists/` and `lib/default-rules.json` are copied from it, never edited here. Change them in Trellis, then:
+`wordlists/`, `lib/default-rules.json`, `lib/outdated-patterns.json` and `THIRD_PARTY_NOTICES.md` are copied from it,
+never edited here. Change them in Trellis, then:
 
 ```bash
 npm run sync-engine -- --from ../Trellis     # copy the engine, word lists and default rules
