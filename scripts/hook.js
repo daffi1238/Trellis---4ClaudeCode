@@ -7,6 +7,9 @@
 //   PostToolUse          obfuscate tool results before Claude sees them
 //   MessageDisplay       show the original values in Claude's replies, on screen only
 //   SessionStart         explain placeholders to Claude; warn about sensitive data in CLAUDE.md
+//
+// Behind the Trellis proxy (scripts/proxy.js), the proxy obfuscates and restores everything with its own vault, so
+// the hooks only run the /trellis:* commands and ask before network-capable commands that hold sensitive values.
 'use strict';
 
 const fs = require('node:fs');
@@ -17,6 +20,8 @@ const S = require('../lib/settings.js');
 const Vault = require('../lib/vault.js');
 const R = require('../lib/redact.js');
 const Commands = require('../lib/commands.js');
+const ProxyState = require('../lib/proxy-state.js');
+const T = require('../lib/proxy-transform.js');
 
 const LOCAL_TOOLS = new Set([
   'Bash', 'PowerShell', 'BashOutput', 'Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'NotebookRead', 'Glob', 'Grep', 'LS'
@@ -37,6 +42,15 @@ const NETWORK_RE = new RegExp(
     'Invoke-WebRequest|Invoke-RestMethod|iwr|irm)(?=$|[\\s;&|)`\'"])|/dev/(?:tcp|udp)/|https?://',
   'i'
 );
+
+const PROXY_CONTEXT = [
+  'Trellis (a privacy plugin) is active in this session, in proxy mode.',
+  'Sensitive values (emails, keys, names, the user\'s own terms...) reach you as placeholders such as [EMAIL_1] or [NAME_2], wherever they come from.',
+  'Use placeholders exactly as written, brackets included, in commands, file edits and replies: on the user\'s machine they become the real values before any tool runs, and the user sees the real values on screen.',
+  'Do not guess, decode or reconstruct the original values, and do not ask the user for them.',
+  'Use the built-in Edit and Write tools as usual: they work with placeholders here.',
+  'Tools that send data off the machine (web fetch, web search, MCP servers) receive placeholders as they are.'
+].join(' ');
 
 const SESSION_CONTEXT = [
   'Trellis (a privacy plugin) is active in this session.',
@@ -93,6 +107,8 @@ function onPrompt(input, eventName) {
   const prompt = String(input.prompt || '');
   const cmd = Commands.parse(prompt);
   if (cmd) return block(Commands.run(cmd, { cwd: input.cwd, projectDir: projectDirOf(input) }), eventName);
+  // Behind the proxy, prompts and @ attachments are obfuscated on their way out: nothing to block.
+  if (ProxyState.active()) return null;
 
   const settings = S.load('prompt');
   if (!settings.enabled || settings.prompt === 'off') return null;
@@ -162,6 +178,9 @@ function onPreToolUse(input) {
   const toolInput = input.tool_input;
   const server = mcpServerOf(tool, input);
   const localMcp = server && (settings.localMcpServers || []).includes(server);
+  const proxy = ProxyState.active();
+  // Behind the proxy, local tools already get the real values; outbound tools are still checked below.
+  if (proxy && (LOCAL_TOOLS.has(tool) || localMcp)) return proxyPreToolUse(tool, toolInput, settings);
 
   if (LOCAL_TOOLS.has(tool) || localMcp) {
     if (!settings.restoreLocalTools) return null;
@@ -189,6 +208,29 @@ function onPreToolUse(input) {
     return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: settings.outbound === 'ask' ? 'ask' : 'deny', permissionDecisionReason: reason } };
   }
   return null;
+}
+
+// Behind the proxy, tool inputs already hold the real values. Only shell commands that hold sensitive values and
+// look able to reach the network are checked, by the rules and by the values the proxy has seen.
+function proxyPreToolUse(tool, toolInput, settings) {
+  if (!SHELL_TOOLS.has(tool) || settings.networkCommands === 'allow') return null;
+  const command = String(toolInput?.command || '');
+  if (!NETWORK_RE.test(command)) return null;
+  const labels = R.scan(command, settings);
+  const vault = new Vault.Vault(S.readJson(ProxyState.vaultFile(), null));
+  const re = T.literalRegex(vault);
+  if (re) {
+    const byValue = new Map(Object.values(vault.data.tokens).map((t) => [t.value, t.label]));
+    for (const v of command.match(re) || []) labels[byValue.get(v)] = (labels[byValue.get(v)] || 0) + 1;
+  }
+  if (!Object.keys(labels).length) return null;
+  return {
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: 'ask',
+      permissionDecisionReason: `Trellis: this command contains sensitive data (${R.describe(labels)}) and may send it over the network. Allow only if that is intended.`
+    }
+  };
 }
 
 const quote = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
@@ -227,6 +269,7 @@ function autoMode(tool, toolInput, vault, input, settings) {
 }
 
 function onPostToolUse(input) {
+  if (ProxyState.active()) return null; // the proxy obfuscates tool results on their way out
   const settings = S.load('tool');
   if (!settings.enabled || !settings.toolOutput) return null;
   if (input.tool_response === undefined || input.tool_response === null) return null;
@@ -238,6 +281,7 @@ function onPostToolUse(input) {
 // ---------- Display and session ----------
 
 function onMessageDisplay(input) {
+  if (ProxyState.active()) return null; // replies already arrive with the real values
   const settings = S.load('prompt');
   if (!settings.enabled || !settings.restoreDisplay) return null;
   const text = input.delta;
@@ -261,6 +305,13 @@ function claudeMdFiles(projectDir) {
 function onSessionStart(input) {
   const settings = S.load('prompt');
   if (!settings.enabled) return null;
+  const proxy = ProxyState.active();
+  if (proxy) {
+    return {
+      systemMessage: `Trellis: proxy mode (${proxy.url}). Everything sent to the model is obfuscated, CLAUDE.md and @ attachments included.`,
+      hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: PROXY_CONTEXT }
+    };
+  }
   const result = { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: SESSION_CONTEXT } };
   if (settings.checkClaudeMd) {
     const findings = [];
