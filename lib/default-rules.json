@@ -1,0 +1,92 @@
+[
+  {
+    "id": "private-key",
+    "name": "Private key",
+    "type": "regex",
+    "pattern": "-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]+?-----END [A-Z ]*PRIVATE KEY-----",
+    "flags": "g",
+    "replacement": "",
+    "enabled": true
+  },
+  {
+    "id": "jwt",
+    "name": "JWT",
+    "type": "regex",
+    "pattern": "\\beyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+",
+    "flags": "g",
+    "replacement": "",
+    "enabled": true
+  },
+  {
+    "id": "api-key",
+    "name": "API key",
+    "type": "regex",
+    "pattern": "\\b(?:sk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,}|xox[abprs]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{35})",
+    "flags": "g",
+    "replacement": "",
+    "enabled": true
+  },
+  {
+    "id": "secret-assign",
+    "name": "Secret",
+    "type": "regex",
+    "pattern": "(?<=\\b(?:password|passwd|pwd|passwort|contraseña|mot de passe|secret|token|api[_-]?key)\\s*[:=]\\s*[\"']?)[^\\s\"',;]+",
+    "flags": "gi",
+    "replacement": "",
+    "enabled": true
+  },
+  {
+    "id": "email",
+    "name": "Email",
+    "type": "regex",
+    "pattern": "(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]{1,64}@(?:[A-Za-z0-9-]{1,63}\\.){1,8}[A-Za-z]{2,24}(?![A-Za-z0-9-])",
+    "flags": "g",
+    "replacement": "",
+    "enabled": true
+  },
+  {
+    "id": "iban",
+    "name": "IBAN",
+    "type": "regex",
+    "pattern": "\\b[A-Z]{2}\\d{2}(?: ?[A-Z0-9]{4}){3,7}(?: ?[A-Z0-9]{1,3})?\\b",
+    "flags": "g",
+    "replacement": "",
+    "enabled": true
+  },
+  {
+    "id": "card",
+    "name": "Card",
+    "type": "regex",
+    "pattern": "\\b(?:\\d{4}[ -]?){3}\\d{4}\\b",
+    "flags": "g",
+    "replacement": "",
+    "enabled": true
+  },
+  {
+    "id": "dni-es",
+    "name": "National ID",
+    "type": "regex",
+    "pattern": "\\b[XYZ]?\\d{7,8}[- ]?[TRWAGMYFPDXBNJZSQVHLCKE]\\b",
+    "flags": "gi",
+    "replacement": "",
+    "enabled": true
+  },
+  {
+    "id": "phone-es",
+    "name": "Phone",
+    "type": "regex",
+    "pattern": "(?:\\+34[ -]?)?\\b[6789]\\d{2}[ -]?\\d{3}[ -]?\\d{3}\\b",
+    "flags": "g",
+    "replacement": "",
+    "enabled": true
+  },
+  {
+    "id": "ipv4",
+    "name": "IPv4",
+    "type": "regex",
+    "pattern": "\\b(?:(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\b",
+    "flags": "g",
+    "replacement": "",
+    "enabled": true
+  }
+]

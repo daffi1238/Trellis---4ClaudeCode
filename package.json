@@ -4,8 +4,12 @@
   "private": true,
   "description": "Trellis for Claude Code: keep sensitive data out of the conversation.",
   "license": "MIT",
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "sync-engine": "node scripts/sync-engine.js",
+    "check-engine": "node scripts/sync-engine.js --check"
   }
 }

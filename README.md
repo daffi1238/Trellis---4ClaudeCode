@@ -176,7 +176,16 @@ claude plugin validate .         # check the manifests
 claude --plugin-dir .            # try it without installing
 ```
 
-`lib/obfuscator.js` and `wordlists/` are copied from the browser extension; keep them in sync.
+The detection engine is shared with the [browser extension](https://github.com/daffi1238/Trellis): `lib/obfuscator.js`,
+`wordlists/` and `lib/default-rules.json` are copied from it, never edited here. Change them in Trellis, then:
+
+```bash
+npm run sync-engine -- --from ../Trellis     # copy the engine, word lists and default rules
+npm run check-engine -- --from ../Trellis    # only compare (exit 1 if they differ)
+```
+
+CI runs the check against Trellis's `main` on every push and every Monday, so a change to the engine in Trellis
+shows up here as a failing check until it is synced.
 
 ## License
 

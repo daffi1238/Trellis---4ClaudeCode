@@ -3,6 +3,10 @@ name: Tests
 on:
   push:
   pull_request:
+  workflow_dispatch:
+  # Weekly, so a change to the engine in Trellis is noticed even if this repository is not touched.
+  schedule:
+    - cron: '0 6 * * 1'
 
 permissions:
   contents: read
@@ -19,3 +23,19 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - run: npm test
+
+  engine-sync:
+    name: Engine in sync with Trellis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out Trellis (browser extension)
+        uses: actions/checkout@v4
+        with:
+          repository: daffi1238/Trellis
+          path: trellis-src
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Compare engine, word lists and default rules
+        run: node scripts/sync-engine.js --from trellis-src --check
