@@ -1,5 +1,6 @@
 ---
-description: How to start Trellis proxy mode (obfuscates everything sent to the model)
+description: Trellis proxy mode (obfuscates everything sent to the model) - status, or install/uninstall it as a service
+argument-hint: "[install [--port N] [--upstream URL] | uninstall]"
 disable-model-invocation: true
 ---
 

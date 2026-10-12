@@ -162,7 +162,7 @@ function handle(msg) {
       return reply(id, {
         protocolVersion: params?.protocolVersion || PROTOCOL,
         capabilities: { tools: {} },
-        serverInfo: { name: 'trellis', version: '0.3.0' }
+        serverInfo: { name: 'trellis', version: '0.4.0' }
       });
     case 'ping':
       return reply(id, {});

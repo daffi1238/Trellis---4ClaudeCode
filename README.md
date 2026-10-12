@@ -18,7 +18,7 @@ same rules, memory and word lists.
 
 Everything runs locally in Node.js. Trellis makes no network requests and has no dependencies.
 
-> **Status: early version (0.3.0).** Tested end to end with Claude Code 2.1.296 (`claude -p`): Claude only saw
+> **Status: early version (0.4.0).** Tested end to end with Claude Code 2.1.296 (`claude -p`): Claude only saw
 > placeholders when reading files, and no message sent to the model held an original value; edits (Trellis's
 > `edit` and `multi_edit`, `NotebookEdit`) and `grep` worked on the real values; `curl` with a real value was
 > stopped; sensitive prompts, `@` attachments and `/trellis:*` commands were blocked before any API call; in auto
@@ -116,6 +116,23 @@ ANTHROPIC_BASE_URL=http://127.0.0.1:8788 claude
 `--upstream <url>` forwards to another Anthropic-compatible API. The proxy keeps one vault for every session
 (`vault/proxy.json`).
 
+### As a service (Linux)
+
+```
+/trellis:proxy install [--port 8788] [--upstream https://api.anthropic.com]
+```
+
+creates a systemd user service (`~/.config/systemd/user/trellis-proxy.service`) that starts with your session and is
+restarted if it stops. It runs a copy of the proxy kept in the data directory, because the plugin's own directory
+changes with every update; when the plugin updates, the next session start refreshes that copy and restarts the
+service. Then point Claude Code to it, in your shell profile (`export ANTHROPIC_BASE_URL=http://127.0.0.1:8788`) or
+in `~/.claude/settings.json` (`"env": { "ANTHROPIC_BASE_URL": "http://127.0.0.1:8788" }`).
+
+`/trellis:proxy` shows whether the session uses it and the service's state; `/trellis:proxy uninstall` stops and
+removes it (then remove `ANTHROPIC_BASE_URL`, or Claude Code cannot reach the model). Logs:
+`journalctl --user -u trellis-proxy`. The service uses the `node` that ran the install; reinstall if you remove that
+Node.js version. To keep it running without an open session: `loginctl enable-linger`.
+
 **With the plugin installed**, sessions started with `ANTHROPIC_BASE_URL` pointing to the running proxy are detected,
 and the plugin steps aside: it no longer blocks prompts, obfuscates tool results or restores anything (a second vault
 would number placeholders differently), and Trellis's `edit` tools are not offered (the built-in ones get the real
@@ -169,6 +186,8 @@ The commands run on your machine and never reach Claude; their replies do not re
 | `/trellis:import <file>` | Import a settings file exported from the Trellis browser extension, or a memory list. |
 | `/trellis:clear` | Forget this project's placeholders (all of the proxy's, in proxy mode). |
 | `/trellis:proxy` | How to start proxy mode, or whether this session uses it. |
+| `/trellis:proxy install [--port N] [--upstream URL]` | Run the proxy as a systemd user service (Linux). |
+| `/trellis:proxy uninstall` | Remove that service. |
 | `/trellis:status` | Settings and counts. |
 | `/trellis:help` | The list of commands. |
 

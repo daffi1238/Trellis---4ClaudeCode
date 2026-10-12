@@ -21,6 +21,7 @@ const Vault = require('../lib/vault.js');
 const R = require('../lib/redact.js');
 const Commands = require('../lib/commands.js');
 const ProxyState = require('../lib/proxy-state.js');
+const Service = require('../lib/service.js');
 const T = require('../lib/proxy-transform.js');
 
 const LOCAL_TOOLS = new Set([
@@ -293,6 +294,11 @@ function onMessageDisplay(input) {
   return { hookSpecificOutput: { hookEventName: 'MessageDisplay', displayContent: restored.text } };
 }
 
+// After restarting the proxy service, give it a moment to publish its state again.
+function waitBriefly() {
+  for (let i = 0; i < 20 && !ProxyState.active(); i++) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+}
+
 function claudeMdFiles(projectDir) {
   return [
     path.join(projectDir, 'CLAUDE.md'),
@@ -305,14 +311,21 @@ function claudeMdFiles(projectDir) {
 function onSessionStart(input) {
   const settings = S.load('prompt');
   if (!settings.enabled) return null;
-  const proxy = ProxyState.active();
+  let updated = null;
+  try {
+    updated = Service.refresh(); // after a plugin update, the proxy service runs the new version
+  } catch (e) {
+    updated = `Trellis: could not update the proxy service (${e.message}).`;
+  }
+  const proxy = updated ? (waitBriefly(), ProxyState.active()) : ProxyState.active();
   if (proxy) {
     return {
-      systemMessage: `Trellis: proxy mode (${proxy.url}). Everything sent to the model is obfuscated, CLAUDE.md and @ attachments included.`,
+      systemMessage: [updated, `Trellis: proxy mode (${proxy.url}). Everything sent to the model is obfuscated, CLAUDE.md and @ attachments included.`].filter(Boolean).join('\n'),
       hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: PROXY_CONTEXT }
     };
   }
   const result = { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: SESSION_CONTEXT } };
+  if (updated) result.systemMessage = updated;
   if (settings.checkClaudeMd) {
     const findings = [];
     for (const file of claudeMdFiles(projectDirOf(input))) {
@@ -326,7 +339,7 @@ function onSessionStart(input) {
       if (Object.keys(labels).length) findings.push(`${file.replace(os.homedir(), '~')} (${R.describe(labels)})`);
     }
     if (findings.length) {
-      result.systemMessage =
+      result.systemMessage = (updated ? updated + '\n' : '') +
         `Trellis: these files are sent to Claude as they are, at the start of every session, and contain sensitive data: ${findings.join('; ')}. ` +
         'Move that data out of them, or replace it with placeholders.';
     }
