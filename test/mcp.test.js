@@ -36,7 +36,7 @@ test('handshake and tool list', () => {
     { jsonrpc: '2.0', id: 2, method: 'tools/list' }
   );
   assert.equal(init.result.serverInfo.name, 'trellis');
-  assert.deepEqual(list.result.tools.map((t) => t.name), ['edit', 'multi_edit']);
+  assert.deepEqual(list.result.tools.map((t) => t.name), ['edit', 'multi_edit', 'write']);
 });
 
 test('edits with placeholders apply the real values, and the reply has none', () => {
@@ -80,6 +80,15 @@ test('multi_edit applies edits in order, all or nothing', () => {
   ] }, 'multi_edit');
   assert.equal(ok.isError, undefined, ok.content[0].text);
   assert.equal(fs.readFileSync(file, 'utf8'), 'OWNER=dba@example.com # primary\nBACKUP=ops@example.com\n');
+});
+
+test('write creates files with the real values', () => {
+  const sb = sandbox();
+  sb.hook({ hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_response: { stdout: 'ops@example.com' } });
+  const file = path.join(sb.project, 'sub', 'owners.txt');
+  const r = sb.call({ file_path: file, content: 'owner=[EMAIL_1]\n' }, 'write');
+  assert.equal(r.content[0].text, `Created ${file}.`);
+  assert.equal(fs.readFileSync(file, 'utf8'), 'owner=ops@example.com\n');
 });
 
 test('NotebookEdit gets placeholders restored by the hook (its validation does not check the source)', () => {

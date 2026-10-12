@@ -18,15 +18,17 @@ same rules, memory and word lists.
 
 Everything runs locally in Node.js. Trellis makes no network requests and has no dependencies.
 
-> **Status: early version (0.1.0).** Tested end to end with Claude Code 2.1.296 (`claude -p`): Claude only saw
+> **Status: early version (0.2.0).** Tested end to end with Claude Code 2.1.296 (`claude -p`): Claude only saw
 > placeholders when reading files, and no message sent to the model held an original value; edits (Trellis's
 > `edit` and `multi_edit`, `NotebookEdit`) and `grep` worked on the real values; `curl` with a real value was
-> stopped; sensitive prompts, `@` attachments and `/trellis:*` commands were blocked before any API call.
+> stopped; sensitive prompts, `@` attachments and `/trellis:*` commands were blocked before any API call; in auto
+> mode, recorded API requests (including the classifier's) held no original values.
 > Feedback and issues are welcome.
 
 ## Install
 
-Requires Node.js 18 or later.
+Requires Node.js 18 or later. Hooks run in Claude Code on your machine, so Trellis works the same with any model
+provider Claude Code is pointed at (Anthropic, or another one through `ANTHROPIC_BASE_URL`).
 
 ```
 /plugin marketplace add daffi1238/Trellis-4ClaudeCode
@@ -73,6 +75,22 @@ Claude > trellis edit config/team.yml: "# contact: [EMAIL_1]"
 - Placeholders are kept per project, in `vault/<hash>.json` inside the data directory (readable only by you), so
   they survive resumed and compacted sessions. `/trellis:clear` forgets them.
 - Only the bracketed form is restored: `EMAIL_1` in code is left alone.
+
+### Auto mode
+
+In auto mode, Claude Code sends every pending tool call to a classifier model (with your model provider) to decide
+whether to allow it, *after* the hooks have run. If Trellis put the real values into tool inputs there, the
+classifier would receive them. So in auto mode Trellis never does:
+
+- **Bash:** the command is wrapped in a small launcher (`scripts/run.js`) that replaces the placeholders when it
+  runs. The classifier sees the command with placeholders and can still judge it.
+- **Write:** denied with a pointer to Trellis's `write` tool, which restores the values inside its local server.
+  `edit` and `multi_edit` already work that way.
+- **Read, Grep, Glob, NotebookEdit and local MCP servers** with placeholders in their input are denied with a pointer
+  to Bash.
+
+This was found and fixed by recording the API requests of a live auto-mode session: before the fix, the classifier
+request held the real value; after it, no request did.
 
 ### Commands that could send data out
 
@@ -160,6 +178,9 @@ Trellis only sees what passes through hooks. Know what it does not cover:
 - **Detection is pattern based.** It will miss data that matches no rule, list or memory term, and can hide words
   that are not sensitive (use `/trellis:allow`). The name lists can obfuscate capitalized identifiers in code
   (`wordlistsInToolOutput: false` turns them off for tool results).
+- **Deliberate evasion is not covered.** Trellis prevents accidental exposure. A model or a prompt injection that
+  sets out to leak data can still do it, for example by printing a file base64-encoded: encoded output matches no
+  rule.
 - **Local files and commands get real values.** That is the point, but it means a script Claude writes can still
   use them. Network-capable commands ask first; other ways out (a test that sends email, a build that uploads)
   cannot be detected.

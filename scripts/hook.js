@@ -10,6 +10,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const os = require('node:os');
 const path = require('node:path');
 const S = require('../lib/settings.js');
@@ -26,6 +27,8 @@ const OUTBOUND_TOOLS = new Set(['WebFetch', 'WebSearch']);
 const OWN_TOOL_RE = /^mcp__plugin_trellis_trellis__/;
 const EDIT_TOOL = 'mcp__plugin_trellis_trellis__edit';
 const MULTI_EDIT_TOOL = 'mcp__plugin_trellis_trellis__multi_edit';
+const WRITE_TOOL = 'mcp__plugin_trellis_trellis__write';
+const RUN_SCRIPT = path.join(__dirname, 'run.js');
 // Commands that can send data off the machine (or run code that can).
 const NETWORK_RE = new RegExp(
   '(?:^|[\\s;&|(`$\'"])(?:curl|wget|nc|ncat|netcat|socat|telnet|ssh|scp|sftp|rsync|ftp|http|https|xh|aria2c|' +
@@ -39,7 +42,7 @@ const SESSION_CONTEXT = [
   'Trellis (a privacy plugin) is active in this session.',
   'Sensitive values in tool results (emails, keys, names, the user\'s own terms...) are replaced by placeholders such as [EMAIL_1] or [NAME_2].',
   'Use placeholders exactly as written, brackets included, in commands, file writes and replies: on the user\'s machine Trellis puts the real values back when local tools run, and the user sees the real values on screen.',
-  `The built-in Edit tool cannot match text that contains placeholders (the file has the real values and Edit checks it before Trellis runs): when old_string would contain a placeholder, use the ${EDIT_TOOL} tool instead, with the same arguments (${MULTI_EDIT_TOOL} for several edits to one file). Write, NotebookEdit, Bash, Grep and Glob accept placeholders directly.`,
+  `The built-in Edit tool cannot match text that contains placeholders (the file has the real values and Edit checks it before Trellis runs): when old_string would contain a placeholder, use the ${EDIT_TOOL} tool instead, with the same arguments (${MULTI_EDIT_TOOL} for several edits to one file). Write, NotebookEdit, Bash, Grep and Glob accept placeholders directly, except in auto mode, where Trellis tells you what to use instead (Bash, ${WRITE_TOOL}).`,
   'Do not guess, decode or reconstruct the original values, and do not ask the user for them.',
   'Tools that send data off the machine (web fetch, web search, MCP servers) receive placeholders as they are.',
   'Text such as EMAIL_1 without brackets is not a placeholder.'
@@ -166,6 +169,7 @@ function onPreToolUse(input) {
     if (!vault.size) return null;
     const restored = R.restoreDeep(toolInput, vault);
     if (!restored.changed) return null;
+    if (input.permission_mode === 'auto') return autoMode(tool, toolInput, vault, input, settings);
     const hso = { hookEventName: 'PreToolUse', updatedInput: restored.value };
     if (SHELL_TOOLS.has(tool) && settings.networkCommands !== 'allow' && NETWORK_RE.test(String(toolInput.command || ''))) {
       hso.permissionDecision = 'ask';
@@ -185,6 +189,41 @@ function onPreToolUse(input) {
     return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: settings.outbound === 'ask' ? 'ask' : 'deny', permissionDecisionReason: reason } };
   }
   return null;
+}
+
+const quote = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
+
+// In auto mode, Claude Code sends each pending tool call, after the hooks, to a classifier model: an input with
+// restored values would reach the model provider. So no real value is ever put into a tool input here. Shell
+// commands are wrapped (scripts/run.js restores them when they run); Trellis's own MCP tools restore inside the
+// server; everything else is denied with a pointer to one of those.
+function autoMode(tool, toolInput, vault, input, settings) {
+  const command = typeof toolInput.command === 'string' ? toolInput.command : '';
+  if (tool === 'Bash') {
+    // Placeholders only in other fields (the description) need nothing.
+    if (!R.restoreText(command, vault).tokens.size) return null;
+    const tag = `TRELLIS_${crypto.randomBytes(6).toString('hex')}`;
+    const wrapped = `node ${quote(RUN_SCRIPT)} ${quote(Vault.vaultPath(projectDirOf(input)))} <<'${tag}'\n${command}\n${tag}`;
+    const hso = { hookEventName: 'PreToolUse', updatedInput: { ...toolInput, command: wrapped } };
+    if (settings.networkCommands !== 'allow' && NETWORK_RE.test(command)) {
+      hso.permissionDecision = 'ask';
+      hso.permissionDecisionReason = 'Trellis: this command will run with real values in place of its placeholders and may send them over the network. Allow only if that is intended.';
+    }
+    return { hookSpecificOutput: hso };
+  }
+  const instead =
+    tool === 'Write'
+      ? `use the ${WRITE_TOOL} tool with the same arguments`
+      : 'use the Bash tool (for example cat, grep, find, or a short script) with the placeholders in the command';
+  return {
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: 'deny',
+      permissionDecisionReason:
+        `Trellis: in auto mode, ${tool} cannot receive the real values behind placeholders (the auto-mode classifier would see them). ` +
+        `Instead, ${instead}: Trellis restores the values there without exposing them.`
+    }
+  };
 }
 
 function onPostToolUse(input) {

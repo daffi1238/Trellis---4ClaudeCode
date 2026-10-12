@@ -1,7 +1,7 @@
 {
   "name": "trellis",
   "displayName": "Trellis",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Keep sensitive data out: obfuscates what Claude reads and blocks sensitive prompts, restoring the real values only on your machine.",
   "author": { "name": "daffi1238", "url": "https://github.com/daffi1238" },
   "homepage": "https://github.com/daffi1238/Trellis-4ClaudeCode",

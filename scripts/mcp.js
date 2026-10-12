@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-// Local MCP server with the edit tools for text that contains Trellis placeholders: "edit" and "multi_edit".
+// Local MCP server with tools that accept Trellis placeholders: "edit", "multi_edit" and "write".
 //
 // Claude Code checks that an Edit's old_string exists in the file before any hook runs, so an Edit written with
 // placeholders ("[EMAIL_1]") always fails: the file has the real value. These tools restore the placeholders and
-// apply the edits themselves, on this machine. MCP over stdio, newline-delimited JSON-RPC, no dependencies.
+// apply the edits themselves, on this machine. In auto mode, "write" replaces the Write tool for the same reason the
+// hook never restores inputs there: the auto-mode classifier would see the real values.
+// MCP over stdio, newline-delimited JSON-RPC, no dependencies.
 'use strict';
 
 const fs = require('node:fs');
@@ -63,7 +65,23 @@ const MULTI_EDIT_TOOL = {
   annotations: { title: 'Multi-edit with placeholders', destructiveHint: true, openWorldHint: false }
 };
 
-const TOOLS = [EDIT_TOOL, MULTI_EDIT_TOOL];
+const WRITE_TOOL = {
+  name: 'write',
+  description:
+    'Write a file whose content contains Trellis placeholders such as [EMAIL_1] (creates or overwrites it). ' +
+    'Placeholders are replaced by the real values on the user\'s machine. Use it when Trellis says Write cannot be used.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      file_path: { type: 'string', description: 'Absolute path of the file to write' },
+      content: { type: 'string', description: 'The content (may contain placeholders)' }
+    },
+    required: ['file_path', 'content']
+  },
+  annotations: { title: 'Write with placeholders', destructiveHint: true, openWorldHint: false }
+};
+
+const TOOLS = [EDIT_TOOL, MULTI_EDIT_TOOL, WRITE_TOOL];
 
 function projectDir() {
   return process.env.CLAUDE_PROJECT_DIR || process.cwd();
@@ -114,7 +132,18 @@ function multiEdit(args) {
   return applyEdits(args?.file_path, args?.edits);
 }
 
-const HANDLERS = { edit, multi_edit: multiEdit };
+function write(args) {
+  const { file_path: rawPath, content } = args || {};
+  if (typeof rawPath !== 'string' || typeof content !== 'string') throw new Error('file_path and content must be strings');
+  const vault = Vault.read(projectDir());
+  const file = path.resolve(projectDir(), R.restoreText(rawPath, vault).text);
+  const existed = fs.existsSync(file);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, R.restoreText(content, vault).text);
+  return `${existed ? 'Overwrote' : 'Created'} ${rawPath}.`;
+}
+
+const HANDLERS = { edit, multi_edit: multiEdit, write };
 
 function reply(id, result) {
   process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n');
@@ -132,7 +161,7 @@ function handle(msg) {
       return reply(id, {
         protocolVersion: params?.protocolVersion || PROTOCOL,
         capabilities: { tools: {} },
-        serverInfo: { name: 'trellis', version: '0.1.0' }
+        serverInfo: { name: 'trellis', version: '0.2.0' }
       });
     case 'ping':
       return reply(id, {});
@@ -166,4 +195,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { edit, multiEdit, handle, TOOLS };
+module.exports = { edit, multiEdit, write, handle, TOOLS };
