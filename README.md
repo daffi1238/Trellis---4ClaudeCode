@@ -18,7 +18,7 @@ same rules, memory and word lists.
 
 Everything runs locally in Node.js. Trellis makes no network requests and has no dependencies.
 
-> **Status: early version (0.2.0).** Tested end to end with Claude Code 2.1.296 (`claude -p`): Claude only saw
+> **Status: early version (0.3.0).** Tested end to end with Claude Code 2.1.296 (`claude -p`): Claude only saw
 > placeholders when reading files, and no message sent to the model held an original value; edits (Trellis's
 > `edit` and `multi_edit`, `NotebookEdit`) and `grep` worked on the real values; `curl` with a real value was
 > stopped; sensitive prompts, `@` attachments and `/trellis:*` commands were blocked before any API call; in auto
@@ -105,13 +105,23 @@ the model API obfuscates every Messages API request on its way out, whatever put
 attachments, the git status, tool errors, Claude Code's own internal calls such as the auto-mode classifier), and
 restores the responses on their way back.
 
+Run `/trellis:proxy` in Claude Code: it prints the exact command to start the proxy with the plugin's settings and
+memory. It looks like this:
+
 ```bash
-node scripts/proxy.js                     # listens on 127.0.0.1:8788, forwards to https://api.anthropic.com
+TRELLIS_HOME=~/.claude/plugins/data/<plugin id> node <plugin dir>/scripts/proxy.js   # 127.0.0.1:8788 -> api.anthropic.com
 ANTHROPIC_BASE_URL=http://127.0.0.1:8788 claude
 ```
 
-`--upstream <url>` forwards to another Anthropic-compatible API. It uses the same settings and memory as the plugin,
-with one vault for every session (`vault/proxy.json`).
+`--upstream <url>` forwards to another Anthropic-compatible API. The proxy keeps one vault for every session
+(`vault/proxy.json`).
+
+**With the plugin installed**, sessions started with `ANTHROPIC_BASE_URL` pointing to the running proxy are detected,
+and the plugin steps aside: it no longer blocks prompts, obfuscates tool results or restores anything (a second vault
+would number placeholders differently), and Trellis's `edit` tools are not offered (the built-in ones get the real
+values). It still runs the `/trellis:*` commands, asks before network-capable shell commands that contain sensitive
+values, and denies web and MCP tools sensitive input. If the proxy stops, Claude Code cannot reach the model at all,
+so nothing goes out unobfuscated.
 
 | | Hooks (plugin) | Proxy mode |
 |---|---|---|
@@ -121,8 +131,10 @@ with one vault for every session (`vault/proxy.json`).
 | Sensitive prompts | blocked, you resend an obfuscated version | sent obfuscated, nothing to resend |
 | Built-in `Edit` with placeholders | ❌ (Trellis's `edit` tool instead) | ✅ (Claude Code gets real values) |
 | Web and MCP tools get placeholders, never real values | ✅ | ✅ |
-| Network-capable commands with real values ask first | ✅ | ❌ not yet |
+| Network-capable commands with real values ask first | ✅ | ✅ with the plugin installed |
 | Setup | `/plugin install` | a process to keep running, and `ANTHROPIC_BASE_URL` |
+
+The recommended setup is both: the plugin, and proxy mode when you can keep the proxy running.
 
 How it works:
 
@@ -136,9 +148,9 @@ How it works:
 - **Deterministic:** the same history always gives the same request, so prompt caching keeps working.
 - **Fails closed:** a request that cannot be obfuscated is not sent.
 
-Tested live with Claude Code 2.1.296 in auto mode, with the API requests recorded behind the proxy: the built-in
-`Edit` and Bash worked on the real values, the `CLAUDE.md` and `@` attachment data were obfuscated, and no request
-held an original value. Obfuscation costs about 60 ms for a 400 KB request.
+Tested live with Claude Code 2.1.296, with and without the plugin, with the API requests recorded behind the proxy:
+the built-in `Edit` and Bash worked on the real values, the `CLAUDE.md` and `@` attachment data were obfuscated, a
+`curl` with a real email asked first, and no request held an original value. Obfuscation costs about 60 ms for a 400 KB request.
 
 Limits: only requests to the model API go through the proxy. Web fetches, MCP servers, telemetry and claude.ai
 connectors use their own connections (tool calls to them keep placeholders, see above). Local transcripts hold the
@@ -155,7 +167,8 @@ The commands run on your machine and never reach Claude; their replies do not re
 | `/trellis:forget <term>[, ...]` | Remove terms from the memory and the allowlist. |
 | `/trellis:scan <file>` | Show what Trellis would hide in a file. |
 | `/trellis:import <file>` | Import a settings file exported from the Trellis browser extension, or a memory list. |
-| `/trellis:clear` | Forget this project's placeholders. |
+| `/trellis:clear` | Forget this project's placeholders (all of the proxy's, in proxy mode). |
+| `/trellis:proxy` | How to start proxy mode, or whether this session uses it. |
 | `/trellis:status` | Settings and counts. |
 | `/trellis:help` | The list of commands. |
 

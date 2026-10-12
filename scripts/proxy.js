@@ -4,6 +4,9 @@
 //   node scripts/proxy.js [--port 8788] [--upstream https://api.anthropic.com]
 //   ANTHROPIC_BASE_URL=http://127.0.0.1:8788 claude
 //
+// /trellis:proxy prints the exact command, with the plugin's data directory (TRELLIS_HOME), so the proxy uses the
+// same settings and memory as the plugin. While it runs, the plugin's hooks see it and leave obfuscation to it.
+//
 // Messages API requests are obfuscated before they leave this machine, whatever put the data there: prompts,
 // CLAUDE.md, @ attachments, git status, tool results and errors, and Claude Code's own internal calls (such as the
 // auto-mode classifier). Responses are restored, so Claude Code and its tools work with the real values.
@@ -12,11 +15,11 @@
 
 const http = require('node:http');
 const https = require('node:https');
-const path = require('node:path');
 const S = require('../lib/settings.js');
 const Vault = require('../lib/vault.js');
 const R = require('../lib/redact.js');
 const T = require('../lib/proxy-transform.js');
+const ProxyState = require('../lib/proxy-state.js');
 
 function parseArgs(argv) {
   const args = { port: Number(process.env.TRELLIS_PROXY_PORT) || 8788, upstream: process.env.TRELLIS_UPSTREAM || 'https://api.anthropic.com' };
@@ -28,7 +31,6 @@ function parseArgs(argv) {
   return args;
 }
 
-const vaultFile = () => path.join(S.dataDir(), 'vault', 'proxy.json');
 const isMessages = (url) => /^\/v1\/messages(?:\/count_tokens)?(?:\?|$)/.test(url);
 const isGeneration = (url) => /^\/v1\/messages(?:\?|$)/.test(url);
 
@@ -76,7 +78,7 @@ function handle(upstream, req, res) {
       if (!settings.enabled) {
         vault = new Vault.Vault(null); // disabled: nothing obfuscated, nothing restored
       } else {
-        const result = Vault.updateFile(vaultFile(), (v) => {
+        const result = Vault.updateFile(ProxyState.vaultFile(), (v) => {
           vault = v;
           return T.redactRequest(json, settings, v);
         });
@@ -126,9 +128,18 @@ function main() {
   const { port, upstream } = parseArgs(process.argv.slice(2));
   const server = http.createServer((req, res) => handle(upstream, req, res));
   server.listen(port, '127.0.0.1', () => {
-    log(`listening on http://127.0.0.1:${port} -> ${upstream}`);
-    log(`start Claude Code with ANTHROPIC_BASE_URL=http://127.0.0.1:${port}`);
+    const url = `http://127.0.0.1:${port}`;
+    ProxyState.write({ url, upstream, startedAt: new Date().toISOString() });
+    log(`listening on ${url} -> ${upstream} (data: ${S.dataDir()})`);
+    log(`start Claude Code with ANTHROPIC_BASE_URL=${url}`);
   });
+  const stop = () => {
+    ProxyState.clear();
+    process.exit(0);
+  };
+  process.on('SIGINT', stop);
+  process.on('SIGTERM', stop);
+  process.on('exit', () => ProxyState.clear());
 }
 
 if (require.main === module) main();

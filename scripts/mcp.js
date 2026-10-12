@@ -13,6 +13,7 @@ const path = require('node:path');
 const readline = require('node:readline');
 const Vault = require('../lib/vault.js');
 const R = require('../lib/redact.js');
+const ProxyState = require('../lib/proxy-state.js');
 
 const PROTOCOL = '2025-06-18';
 
@@ -161,12 +162,13 @@ function handle(msg) {
       return reply(id, {
         protocolVersion: params?.protocolVersion || PROTOCOL,
         capabilities: { tools: {} },
-        serverInfo: { name: 'trellis', version: '0.2.0' }
+        serverInfo: { name: 'trellis', version: '0.3.0' }
       });
     case 'ping':
       return reply(id, {});
     case 'tools/list':
-      return reply(id, { tools: TOOLS });
+      // Behind the Trellis proxy the built-in tools already get the real values: these are not needed.
+      return reply(id, { tools: ProxyState.active() ? [] : TOOLS });
     case 'tools/call': {
       const run = HANDLERS[params?.name];
       if (!run) return fail(id, -32602, `Unknown tool: ${params?.name}`);
