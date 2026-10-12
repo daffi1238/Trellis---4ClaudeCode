@@ -22,6 +22,7 @@ const R = require('../lib/redact.js');
 const Commands = require('../lib/commands.js');
 const ProxyState = require('../lib/proxy-state.js');
 const Service = require('../lib/service.js');
+const ModPrompt = require('./mod-prompt.js');
 const T = require('../lib/proxy-transform.js');
 
 const LOCAL_TOOLS = new Set([
@@ -113,6 +114,8 @@ function onPrompt(input, eventName) {
 
   const settings = S.load('prompt');
   if (!settings.enabled || settings.prompt === 'off') return null;
+  // The Trellis mod already rewrote this exact prompt (and redirects its @ attachments to obfuscated copies).
+  if (settings.prompt === 'rewrite' && ModPrompt.wasHandled(input.session_id, prompt)) return null;
   const cwd = input.cwd || process.cwd();
 
   const fileFindings = [];
@@ -141,6 +144,10 @@ function onPrompt(input, eventName) {
     return { systemMessage: `Trellis: ${what}${fileNote}`.trim() };
   }
 
+  const modNote =
+    settings.prompt === 'rewrite'
+      ? '\n\n(With Claude Code 2.1.287 or later, Trellis rewrites prompts like this one by itself instead of blocking them.)'
+      : '';
   let reason = '';
   if (sensitive) {
     const result = Vault.update(projectDirOf(input), (vault) => R.obfuscateText(prompt, settings, vault));
@@ -151,7 +158,7 @@ function onPrompt(input, eventName) {
   } else {
     reason = 'Trellis blocked this prompt. Nothing was sent.';
   }
-  return block(reason + fileNote, eventName);
+  return block(reason + fileNote + modNote, eventName);
 }
 
 function onExpansion(input) {
@@ -184,12 +191,14 @@ function onPreToolUse(input) {
   if (proxy && (LOCAL_TOOLS.has(tool) || localMcp)) return proxyPreToolUse(tool, toolInput, settings);
 
   if (LOCAL_TOOLS.has(tool) || localMcp) {
-    if (!settings.restoreLocalTools) return null;
+    // An @ attachment read from an obfuscated copy: tools aimed at the copy go to the original file.
+    const redirected = R.mapStrings(toolInput, ModPrompt.toOriginals);
+    if (!settings.restoreLocalTools) return redirected === toolInput ? null : { hookSpecificOutput: { hookEventName: 'PreToolUse', updatedInput: redirected } };
     const vault = Vault.read(projectDirOf(input));
-    if (!vault.size) return null;
-    const restored = R.restoreDeep(toolInput, vault);
+    const restored = vault.size ? R.restoreDeep(redirected, vault) : { value: redirected, tokens: new Set(), changed: false };
+    restored.changed = restored.value !== toolInput;
     if (!restored.changed) return null;
-    if (input.permission_mode === 'auto') return autoMode(tool, toolInput, vault, input, settings);
+    if (input.permission_mode === 'auto') return autoMode(tool, redirected, vault, input, settings);
     const hso = { hookEventName: 'PreToolUse', updatedInput: restored.value };
     if (SHELL_TOOLS.has(tool) && settings.networkCommands !== 'allow' && NETWORK_RE.test(String(toolInput.command || ''))) {
       hso.permissionDecision = 'ask';
@@ -368,6 +377,13 @@ function main() {
   } catch (e) {
     process.stderr.write('Trellis: invalid hook input\n');
     return;
+  }
+  if (input.hook_event_name === 'SessionStart' || input.hook_event_name === 'UserPromptSubmit') {
+    try {
+      S.writePointer(); // lets the mod's helper find this data directory
+    } catch (e) {
+      process.stderr.write(`Trellis: ${e.message}\n`);
+    }
   }
   try {
     const result = handle(input);

@@ -24,6 +24,20 @@ jobs:
           node-version: ${{ matrix.node }}
       - run: npm test
 
+  mod:
+    name: Mod (Claude Code test kit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate the plugin and run the mod's tests (no sign-in needed)
+        run: |
+          npm install --no-save --prefix "$RUNNER_TEMP/cc" @anthropic-ai/claude-code
+          "$RUNNER_TEMP/cc/node_modules/.bin/claude" plugin validate .
+          "$RUNNER_TEMP/cc/node_modules/.bin/claude" plugin test .
+
   engine-sync:
     name: Engine in sync with Trellis
     runs-on: ubuntu-latest

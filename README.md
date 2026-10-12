@@ -11,14 +11,16 @@ same rules, memory and word lists.
 - **The real values stay on your machine and keep working.** When Claude edits a file or runs a command with
   `[EMAIL_1]`, Trellis puts the real value back before the tool runs. In Claude's replies, you see the real values
   on your screen.
-- **Sensitive prompts are never sent.** A prompt with sensitive data is blocked, and Trellis gives you an
-  obfuscated version ready to send.
+- **Prompts are sent with placeholders.** You type `laura.martinez@example.com`, Claude receives `[EMAIL_1]`, and
+  files you attach with `@` are read from an obfuscated copy (Claude Code 2.1.287 or later, through a
+  [mod](https://code.claude.com/docs/en/plugins/mods/overview)). On earlier versions a prompt with sensitive data is
+  blocked, and Trellis gives you an obfuscated version ready to send.
 - **Your own terms.** Add people, companies, clients or projects to the memory with `/trellis:add`. The command
   runs on your machine, so the terms themselves are never sent either.
 
 Everything runs locally in Node.js. Trellis makes no network requests and has no dependencies.
 
-> **Status: early version (0.5.0).** Tested end to end with Claude Code 2.1.296 (`claude -p`): Claude only saw
+> **Status: early version (0.6.0).** Tested end to end with Claude Code 2.1.296 (`claude -p`): Claude only saw
 > placeholders when reading files, and no message sent to the model held an original value; edits (Trellis's
 > `edit` and `multi_edit`, `NotebookEdit`) and `grep` worked on the real values; `curl` with a real value was
 > stopped; sensitive prompts, `@` attachments and `/trellis:*` commands were blocked before any API call; in auto
@@ -44,10 +46,27 @@ Trellis is a set of [hooks](https://code.claude.com/docs/en/hooks):
 | Hook | What Trellis does |
 |---|---|
 | `SessionStart` | Tells Claude that `[LABEL_N]` are placeholders to use as they are. Warns you if a `CLAUDE.md` contains sensitive data. |
-| `UserPromptSubmit` | Blocks prompts with sensitive data and offers an obfuscated version. Checks files attached with `@`. Runs the `/trellis:*` commands. |
+| `UserPromptSubmit` | Runs the `/trellis:*` commands. Blocks prompts with sensitive data that the mod did not rewrite (Claude Code before 2.1.287, or the mod failed), offering an obfuscated version, and checks files attached with `@`. |
 | `PostToolUse` | Obfuscates every tool result before Claude sees it, keeping its structure. |
 | `PreToolUse` | Local tools (`Bash`, `Read`, `Write`, `Edit`, `Grep`, `Glob`...) get placeholders replaced by the real values. Tools that send data off the machine (`WebFetch`, `WebSearch`, MCP servers) never do, and are denied input with sensitive data. |
 | `MessageDisplay` | Shows the real values in Claude's replies, on your screen only. The conversation keeps the placeholders. |
+
+### The prompt mod
+
+On Claude Code 2.1.287 or later, the plugin's [mod](https://code.claude.com/docs/en/plugins/mods/overview)
+(`hooks/prompt-mod.js`) handles two events before anything is sent:
+
+- **`prompt.submit`:** the prompt is rewritten with placeholders, with the same engine, memory and vault as the
+  hooks. `@` mentions of files are left as typed so they still resolve. A dim line in the transcript says what was
+  replaced; Claude never reads it.
+- **`prompt.mention`** (2.1.290 or later): a file attached with `@` that holds sensitive data is read from an
+  obfuscated copy in the data directory, and Claude is told the original path; tools aimed at the copy are sent to
+  the original. Binary files (images, PDFs) are attached as they are.
+
+Mods have no Node.js APIs, so the mod runs `scripts/mod-prompt.js` for the work. It fails safe: if that script
+cannot run, the prompt goes on unchanged and the `UserPromptSubmit` hook blocks it as on earlier versions, and an
+attachment that cannot be checked is not attached. The hook recognises a prompt the mod rewrote by a hash the script
+leaves for that session, so nothing is blocked twice.
 
 It also includes a local MCP server with two tools, `edit` and `multi_edit` (several edits to one file, all or
 nothing). Claude Code checks that an `Edit`'s `old_string` exists in the file before any hook runs, so an `Edit`
@@ -143,9 +162,10 @@ so nothing goes out unobfuscated.
 | | Hooks (plugin) | Proxy mode |
 |---|---|---|
 | Tool results, prompts | ✅ | ✅ |
-| `CLAUDE.md`, `@` attachments, git status, tool errors | ⚠️ warns or blocks | ✅ obfuscated |
+| `@` attachments | ✅ obfuscated copy with the mod (blocked before 2.1.290) | ✅ obfuscated |
+| `CLAUDE.md`, git status, tool errors | ⚠️ warns about `CLAUDE.md` | ✅ obfuscated |
 | Auto-mode classifier | ✅ (Bash wrapped, other tools redirected) | ✅ |
-| Sensitive prompts | blocked, you resend an obfuscated version | sent obfuscated, nothing to resend |
+| Sensitive prompts | sent obfuscated by the mod (blocked before Claude Code 2.1.287) | sent obfuscated |
 | Built-in `Edit` with placeholders | ❌ (Trellis's `edit` tool instead) | ✅ (Claude Code gets real values) |
 | Web and MCP tools get placeholders, never real values | ✅ | ✅ |
 | Network-capable commands with real values ask first | ✅ | ✅ with the plugin installed |
@@ -234,7 +254,7 @@ be there:
 | Key | Values | Default |
 |---|---|---|
 | `enabled` | Turn Trellis off without uninstalling it | `true` |
-| `prompt` | `block`, `warn` (send and notify), `off` | `block` |
+| `prompt` | `rewrite` (sent with placeholders by the mod; blocked where the mod cannot run), `block` (always blocked, with an obfuscated version to send), `warn` (sent as typed, with a notice), `off` | `rewrite` |
 | `toolOutput` | Obfuscate tool results | `true` |
 | `wordlistsInToolOutput` | Apply the name lists to tool results too. Turn off if they add noise in code; memory and rules still apply | `true` |
 | `restoreLocalTools` | Put real values back for local tools | `true` |
@@ -249,14 +269,15 @@ be there:
 
 Trellis only sees what passes through hooks. Know what it does not cover:
 
-- **Files attached with `@`** are added by Claude Code without a tool call. Trellis checks them and blocks the
-  prompt if they contain sensitive data, but cannot obfuscate them: mention the path without `@` and let Claude
-  read it.
+- **Files attached with `@`** are added by Claude Code without a tool call. With the mod (2.1.290 or later) they are
+  read from an obfuscated copy; on earlier versions Trellis can only check them and block the prompt. The path you
+  type after `@` is sent as typed.
 - **`CLAUDE.md` and other context loaded automatically** (memory files, the git status Claude Code adds to the
   system prompt) are sent as they are. Trellis warns about `CLAUDE.md` files, but cannot change them.
 - **The built-in `Edit` tool cannot use placeholders** (see above); those edits go through Trellis's `edit` and
   `multi_edit` tools.
-- **Prompts cannot be rewritten** by a hook, only blocked; that is why you get an obfuscated version to send.
+- **Prompts are only rewritten by the mod** (Claude Code 2.1.287 or later, and not where mods do not run, such as a
+  WSL session of the Desktop app); elsewhere they are blocked and you get an obfuscated version to send.
 - **Tool errors** cannot be rewritten by hooks: an error message that quotes sensitive data reaches Claude.
 - **Images and PDFs** are not inspected.
 - **Detection is pattern based.** It will miss data that matches no rule, list or memory term, and can hide words
@@ -277,6 +298,7 @@ Trellis only sees what passes through hooks. Know what it does not cover:
 
 ```bash
 npm test                         # unit tests: feed hook JSON to scripts/hook.js on stdin
+claude plugin test .             # the mod, with Claude Code's mod test kit (test/*.test.ts)
 claude plugin validate .         # check the manifests
 claude --plugin-dir .            # try it without installing
 ```

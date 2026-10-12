@@ -1,5 +1,8 @@
 {
   "description": "Trellis: keep sensitive data out of the conversation",
+  "modules": [
+    "./prompt-mod.js"
+  ],
   "hooks": {
     "SessionStart": [
       {
