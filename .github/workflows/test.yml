@@ -38,6 +38,21 @@ jobs:
           "$RUNNER_TEMP/cc/node_modules/.bin/claude" plugin validate .
           "$RUNNER_TEMP/cc/node_modules/.bin/claude" plugin test .
 
+  audit:
+    name: Traffic audit (real Claude Code, recorded API)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Claude Code
+        run: npm install --no-save --prefix "$RUNNER_TEMP/cc" @anthropic-ai/claude-code
+      - name: No request to the model holds an original value
+        run: npm run test:audit
+        env:
+          CLAUDE_BIN: ${{ runner.temp }}/cc/node_modules/.bin/claude
+
   engine-sync:
     name: Engine in sync with Trellis
     runs-on: ubuntu-latest

@@ -319,9 +319,17 @@ Trellis only sees what passes through hooks. Know what it does not cover:
 ```bash
 npm test                         # unit tests: feed hook JSON to scripts/hook.js on stdin
 claude plugin test .             # the mod, with Claude Code's mod test kit (test/*.test.ts)
+npm run test:audit               # traffic audit: real Claude Code + Trellis against a recording stand-in API
 claude plugin validate .         # check the manifests
 claude --plugin-dir .            # try it without installing
 ```
+
+The traffic audit runs the installed `claude` (or `CLAUDE_BIN`) with this plugin against `test/audit/fake-api.js`, a
+local stand-in for the Anthropic API that records every request and answers from a script (tool calls included; the
+auto-mode classifier is told to allow). Each scenario then checks that no recorded request holds any of the original
+values, and that the commands Claude ran used the real ones: a prompt with an `@` attachment, tool results and a
+shell command, auto mode, and proxy mode with a `CLAUDE.md`. No account, cost or network; CI runs it on every push.
+With Trellis disabled, every scenario fails.
 
 The detection engine is shared with the [browser extension](https://github.com/daffi1238/Trellis): `lib/obfuscator.js`,
 `wordlists/`, `lib/default-rules.json`, `lib/outdated-patterns.json` and `THIRD_PARTY_NOTICES.md` are copied from it,
