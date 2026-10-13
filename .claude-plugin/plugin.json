@@ -1,11 +1,21 @@
 {
   "name": "trellis",
   "displayName": "Trellis",
-  "version": "0.7.0",
-  "description": "Keep sensitive data out: obfuscates what Claude reads and blocks sensitive prompts, restoring the real values only on your machine.",
-  "author": { "name": "daffi1238", "url": "https://github.com/daffi1238" },
+  "version": "0.7.1",
+  "description": "Keep sensitive data out: Claude sees placeholders in your prompts, attachments and everything it reads; the real values stay on your machine.",
+  "author": {
+    "name": "daffi1238",
+    "url": "https://github.com/daffi1238"
+  },
   "homepage": "https://github.com/daffi1238/Trellis-4ClaudeCode",
   "repository": "https://github.com/daffi1238/Trellis-4ClaudeCode",
   "license": "MIT",
-  "keywords": ["privacy", "security", "redaction", "pii", "secrets", "obfuscation"]
+  "keywords": [
+    "privacy",
+    "security",
+    "redaction",
+    "pii",
+    "secrets",
+    "obfuscation"
+  ]
 }

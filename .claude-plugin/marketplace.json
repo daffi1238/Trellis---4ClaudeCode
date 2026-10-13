@@ -9,7 +9,7 @@
     {
       "name": "trellis",
       "source": "./",
-      "description": "Keep sensitive data out: obfuscates what Claude reads and blocks sensitive prompts, restoring the real values only on your machine."
+      "description": "Keep sensitive data out: Claude sees placeholders in your prompts, attachments and everything it reads; the real values stay on your machine."
     }
   ]
 }

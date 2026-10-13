@@ -1,6 +1,6 @@
 {
   "name": "trellis-claude-code",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "description": "Trellis for Claude Code: keep sensitive data out of the conversation.",
   "license": "MIT",
