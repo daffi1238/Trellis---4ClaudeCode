@@ -19,6 +19,7 @@ const S = require('../lib/settings.js');
 const Vault = require('../lib/vault.js');
 const R = require('../lib/redact.js');
 const T = require('../lib/proxy-transform.js');
+const O = require('../lib/proxy-openai.js');
 const ProxyState = require('../lib/proxy-state.js');
 
 function parseArgs(argv) {
@@ -31,8 +32,34 @@ function parseArgs(argv) {
   return args;
 }
 
-const isMessages = (url) => /^\/v1\/messages(?:\/count_tokens)?(?:\?|$)/.test(url);
-const isGeneration = (url) => /^\/v1\/messages(?:\?|$)/.test(url);
+// The two request formats the proxy obfuscates: Anthropic's Messages API (Claude Code) and OpenAI's Chat
+// Completions (Hermes Agent, DeepSeek, OpenRouter...). Every other request is passed through untouched.
+const FORMATS = {
+  messages: {
+    match: (url) => /^\/v1\/messages(?:\/count_tokens)?(?:\?|$)/.test(url),
+    generates: (url) => /^\/v1\/messages(?:\?|$)/.test(url),
+    redact: T.redactRequest,
+    restore: T.restoreResponse,
+    Stream: T.SseRestorer
+  },
+  chat: {
+    match: (url) => /^(?:\/v1)?\/chat\/completions(?:\?|$)/.test(url),
+    generates: () => true,
+    redact: O.redactChatRequest,
+    restore: O.restoreChatResponse,
+    Stream: O.ChatSseRestorer
+  }
+};
+const formatOf = (req) => (req.method === 'POST' ? Object.values(FORMATS).find((f) => f.match(req.url)) : undefined);
+
+// The upstream URL may carry a path (https://openrouter.ai/api/v1): the request's path goes after it, without
+// repeating /v1.
+function targetUrl(upstream, reqUrl) {
+  const u = new URL(upstream);
+  const base = u.pathname.replace(/\/+$/, '');
+  const path = base.endsWith('/v1') && reqUrl.startsWith('/v1/') ? reqUrl.slice(3) : reqUrl;
+  return new URL(u.origin + base + path);
+}
 
 function log(msg) {
   process.stderr.write(`[trellis-proxy] ${msg}\n`);
@@ -44,7 +71,7 @@ function fail(res, status, message) {
 }
 
 function forward(upstream, req, body, onResponse, onError) {
-  const target = new URL(req.url, upstream);
+  const target = targetUrl(upstream, req.url);
   const headers = { ...req.headers, host: target.host };
   delete headers['accept-encoding']; // plain bodies, so responses can be restored
   delete headers['content-length'];
@@ -62,7 +89,8 @@ function handle(upstream, req, res) {
     let body = Buffer.concat(chunks);
     const onError = (e) => fail(res, 502, `upstream error (${e.code || e.message})`);
 
-    if (req.method !== 'POST' || !isMessages(req.url)) {
+    const format = formatOf(req);
+    if (!format) {
       return forward(upstream, req, body.length ? body : null, (up) => {
         res.writeHead(up.statusCode, up.headers);
         up.pipe(res);
@@ -80,7 +108,7 @@ function handle(upstream, req, res) {
       } else {
         const result = Vault.updateFile(ProxyState.vaultFile(), (v) => {
           vault = v;
-          return T.redactRequest(json, settings, v);
+          return format.redact(json, settings, v);
         });
         body = Buffer.from(JSON.stringify(result.body));
         const found = R.describe(result.labels);
@@ -95,13 +123,13 @@ function handle(upstream, req, res) {
       const type = String(up.headers['content-type'] || '');
       const headers = { ...up.headers };
       delete headers['content-length'];
-      if (!isGeneration(req.url) || up.statusCode !== 200) {
+      if (!format.generates(req.url) || up.statusCode !== 200) {
         res.writeHead(up.statusCode, up.headers);
         return up.pipe(res);
       }
       up.setEncoding('utf8');
       if (type.includes('text/event-stream')) {
-        const sse = new T.SseRestorer(vault, settings);
+        const sse = new format.Stream(vault, settings);
         res.writeHead(up.statusCode, headers);
         up.on('data', (c) => res.write(sse.push(c)));
         up.on('end', () => res.end(sse.end()));
@@ -112,7 +140,7 @@ function handle(upstream, req, res) {
       up.on('end', () => {
         let out = text;
         try {
-          out = JSON.stringify(T.restoreResponse(JSON.parse(text), vault, settings));
+          out = JSON.stringify(format.restore(JSON.parse(text), vault, settings));
         } catch (e) {
           // not JSON: passed through
         }
@@ -144,4 +172,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { handle };
+module.exports = { handle, targetUrl };

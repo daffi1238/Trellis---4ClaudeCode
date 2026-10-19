@@ -154,6 +154,35 @@ ANTHROPIC_BASE_URL=http://127.0.0.1:8788 claude
 `--upstream <url>` forwards to another Anthropic-compatible API. The proxy keeps one vault for every session
 (`vault/proxy.json`).
 
+### Other agents (OpenAI-compatible: Hermes Agent, DeepSeek, OpenRouter…)
+
+The proxy also speaks OpenAI's Chat Completions format (`/v1/chat/completions`), so any agent that lets you set a
+custom OpenAI-compatible endpoint can use it. For example, Hermes Agent against DeepSeek:
+
+```bash
+node scripts/proxy.js --upstream https://api.deepseek.com     # or https://openrouter.ai/api/v1, ...
+```
+
+Then, in Hermes, add a custom OpenAI-compatible provider (`hermes model`, or the custom provider in `config.yaml`)
+with base URL `http://127.0.0.1:8788/v1`, your DeepSeek API key and the model (`deepseek-chat`).
+
+The API key is passed through to the upstream; the proxy never stores it. The same obfuscation applies: messages,
+text parts, tool results (command output, HTTP traffic with `Cookie`/`Set-Cookie` headers, logs) and tool-call
+arguments, parsed as JSON so escaped text is caught too. Replies are restored, streamed or not, including DeepSeek's
+`reasoning_content`.
+
+Which tool calls get the real values back decides what can leave your machine:
+
+- By default every tool does, except web, browser, messaging and MCP tools: `WebFetch`, `WebSearch`, `mcp__*`,
+  `web_*`, `browser_*`, `send_*`, `email_*`, `http_*`, `fetch_*`, `*_search`, `*_fetch`.
+- `"proxyNoRestoreTools": ["deploy_*"]` adds patterns to that list.
+- `"proxyRestoreTools": ["terminal", "read_file"]` turns it around: only those tools get real values.
+
+A tool that receives real values can still send them somewhere: limit where the agent's machine can connect (a
+firewall, an egress proxy such as iron-proxy, Claude Code's sandbox) when it handles sensitive data. User names in
+assignments (`user=`, `login:`) are detected by the `user-assign` rule, off by default because it is noisy in code:
+turn it on in `settings.json` for logs and traffic.
+
 ### As a service (Linux)
 
 ```

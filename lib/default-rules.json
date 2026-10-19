@@ -122,6 +122,24 @@
     "enabled": true
   },
   {
+    "id": "cookie-header",
+    "name": "Cookie",
+    "type": "regex",
+    "pattern": "(?<=^[ \\t]*(?:Set-)?Cookie:[^\\r\\n]*?\\b(?!(?:Path|Domain|Expires|Max-Age|SameSite|Priority|Partitioned)=)[\\w.!#$%&'*+^`|~-]+=)[^;\\r\\n]+",
+    "flags": "gim",
+    "replacement": "",
+    "enabled": true
+  },
+  {
+    "id": "user-assign",
+    "name": "User",
+    "type": "regex",
+    "pattern": "(?<=\\b(?:user(?:name)?|login|uid|usuario)\\s*[:=]\\s*[\"']?)[^\\s\"',;&()<>]{2,64}",
+    "flags": "gi",
+    "replacement": "",
+    "enabled": false
+  },
+  {
     "id": "webhook",
     "name": "Webhook",
     "type": "regex",
