@@ -144,6 +144,7 @@ function handle(upstream, req, res) {
         } catch (e) {
           // not JSON: passed through
         }
+        delete headers['transfer-encoding']; // the body is sent whole, with its length
         headers['content-length'] = Buffer.byteLength(out);
         res.writeHead(up.statusCode, headers);
         res.end(out);
