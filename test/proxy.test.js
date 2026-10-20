@@ -149,3 +149,17 @@ test('outbound tool calls keep their placeholders (JSON and SSE)', () => {
   ]);
   assert.equal(r.push(stream) + r.end(), stream);
 });
+
+test('structured placeholders: subnets and mail domains stay visible; everything restores', () => {
+  const vault = new Vault(null);
+  const s = { ...settings(), structuredPlaceholders: true };
+  const text = 'hosts 10.20.30.40 and 10.20.30.41, gw 10.20.99.1; mail laura@northwind.example, sarah@northwind.example';
+  const { body } = T.redactRequest({ messages: [{ role: 'user', content: text }] }, s, vault);
+  const out = body.messages[0].content;
+  assert.equal(out, 'hosts [NET_1].40 and [NET_1].41, gw [NET_2].1; mail [MAILBOX_1]@[DOMAIN_1], [MAILBOX_2]@[DOMAIN_1]');
+  const reply = { content: [{ type: 'tool_use', id: 't', name: 'Bash', input: { command: 'ping -c1 [NET_1].41 && mail [MAILBOX_2]@[DOMAIN_1]' } }] };
+  const restored = T.restoreResponse(reply, vault, s);
+  assert.equal(JSON.stringify(restored).includes('ping -c1 10.20.30.41 && mail sarah@northwind.example'), true);
+  const plain = T.redactRequest({ messages: [{ role: 'user', content: 'host 10.20.30.40' }] }, settings(), new Vault(null)).body;
+  assert.match(plain.messages[0].content, /^host \[IPV4_1\]$/, 'off by default');
+});

@@ -183,6 +183,10 @@ firewall, an egress proxy such as iron-proxy, Claude Code's sandbox) when it han
 assignments (`user=`, `login:`) are detected by the `user-assign` rule, off by default because it is noisy in code:
 turn it on in `settings.json` for logs and traffic.
 
+For network and infrastructure work, `"structuredPlaceholders": true` keeps how values relate: `10.20.30.40` becomes
+`[NET_1].40` (hosts in the same /24 share `[NET_n]`; the host number stays visible) and an email becomes
+`[MAILBOX_1]@[DOMAIN_1]` (people at the same domain share `[DOMAIN_n]`). Off by default.
+
 ### As a service (Linux)
 
 ```
