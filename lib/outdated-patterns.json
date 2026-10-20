@@ -8,5 +8,8 @@
   ],
   "card": [
     "\\b(?:\\d{4}[ -]?){3}\\d{4}\\b"
+  ],
+  "cookie-header": [
+    "(?<=^[ \\t]*(?:Set-)?Cookie:[^\\r\\n]*?\\b(?!(?:Path|Domain|Expires|Max-Age|SameSite|Priority|Partitioned)=)[\\w.!#$%&'*+^`|~-]+=)[^;\\r\\n]+"
   ]
 }

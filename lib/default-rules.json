@@ -125,7 +125,7 @@
     "id": "cookie-header",
     "name": "Cookie",
     "type": "regex",
-    "pattern": "(?<=^[ \\t]*(?:Set-)?Cookie:[^\\r\\n]*?\\b(?!(?:Path|Domain|Expires|Max-Age|SameSite|Priority|Partitioned)=)[\\w.!#$%&'*+^`|~-]+=)[^;\\r\\n]+",
+    "pattern": "(?<=(?:^|[^\\w-])(?:Set-)?Cookie:[^\\r\\n]*?\\b(?!(?:Path|Domain|Expires|Max-Age|SameSite|Priority|Partitioned)=)[\\w.!#$%&'*+^`|~-]+=)[^;\\r\\n]+",
     "flags": "gim",
     "replacement": "",
     "enabled": true
