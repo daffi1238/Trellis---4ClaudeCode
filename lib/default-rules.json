@@ -31,7 +31,7 @@
     "id": "secret-assign",
     "name": "Secret",
     "type": "regex",
-    "pattern": "(?<=\\b(?:password|passwd|pwd|passwort|contraseña|mot de passe|secret|token|api[_-]?key)\\s*[:=]\\s*[\"']?)[^\\s\"',;]+",
+    "pattern": "(?<=\\b(?:password|passwd|pwd|passwort|contraseña|mot de passe|client[_-]?secret|secret|(?:access|refresh|id)[_-]?token|token|api[_-]?key)[\"']?\\s*[:=]\\s*[\"']?)[^\\s\"',;]+",
     "flags": "gi",
     "replacement": "",
     "enabled": true
@@ -145,6 +145,24 @@
     "type": "regex",
     "pattern": "https://(?:hooks\\.slack\\.com/(?:services|workflows|triggers)/[A-Za-z0-9+/]{20,80}|(?:ptb\\.|canary\\.)?discord(?:app)?\\.com/api/webhooks/\\d+/[A-Za-z0-9_-]{60,80}|[a-z0-9-]+\\.webhook\\.office\\.com/webhookb2/[^\\s\"'<>]+)",
     "flags": "g",
+    "replacement": "",
+    "enabled": true
+  },
+  {
+    "id": "token-cache",
+    "name": "Token",
+    "type": "regex",
+    "pattern": "(?<=\"(?:data|nonce)\"\\s*:\\s*\")[A-Za-z0-9+/_=-]{16,}(?=\")",
+    "flags": "g",
+    "replacement": "",
+    "enabled": true
+  },
+  {
+    "id": "cli-secret-flag",
+    "name": "Token",
+    "type": "regex",
+    "pattern": "(?<=(?:^|\\s)--(?:(?:access|refresh|id)[_-]?token|client[_-]?secret|api[_-]?key|password|secret|token)[= ][\"']?)(?![{\\[])[^\\s\"']+",
+    "flags": "gi",
     "replacement": "",
     "enabled": true
   }

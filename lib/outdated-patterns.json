@@ -11,5 +11,8 @@
   ],
   "cookie-header": [
     "(?<=^[ \\t]*(?:Set-)?Cookie:[^\\r\\n]*?\\b(?!(?:Path|Domain|Expires|Max-Age|SameSite|Priority|Partitioned)=)[\\w.!#$%&'*+^`|~-]+=)[^;\\r\\n]+"
+  ],
+  "secret-assign": [
+    "(?<=\\b(?:password|passwd|pwd|passwort|contraseña|mot de passe|secret|token|api[_-]?key)\\s*[:=]\\s*[\"']?)[^\\s\"',;]+"
   ]
 }
