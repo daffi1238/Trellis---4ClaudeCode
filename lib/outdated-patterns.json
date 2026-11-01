@@ -14,5 +14,8 @@
   ],
   "secret-assign": [
     "(?<=\\b(?:password|passwd|pwd|passwort|contraseña|mot de passe|secret|token|api[_-]?key)\\s*[:=]\\s*[\"']?)[^\\s\"',;]+"
+  ],
+  "token-cache": [
+    "(?<=\"(?:data|nonce)\"\\s*:\\s*\")[A-Za-z0-9+/_=-]{16,}(?=\")"
   ]
 }

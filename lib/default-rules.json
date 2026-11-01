@@ -152,7 +152,7 @@
     "id": "token-cache",
     "name": "Token",
     "type": "regex",
-    "pattern": "(?<=\"(?:data|nonce)\"\\s*:\\s*\")[A-Za-z0-9+/_=-]{16,}(?=\")",
+    "pattern": "(?<=\"(?:data|nonce|prt)\"\\s*:\\s*\")[A-Za-z0-9+/_=-]{16,}(?=\")",
     "flags": "g",
     "replacement": "",
     "enabled": true
@@ -165,5 +165,14 @@
     "flags": "gi",
     "replacement": "",
     "enabled": true
+  },
+  {
+    "id": "opaque-token",
+    "name": "Token",
+    "type": "regex",
+    "pattern": "(?<![A-Za-z0-9_-])(?=[A-Za-z0-9_-]*[A-Z_-])[A-Za-z0-9_-]{40,}(?![A-Za-z0-9_-])",
+    "flags": "g",
+    "replacement": "",
+    "enabled": false
   }
 ]
